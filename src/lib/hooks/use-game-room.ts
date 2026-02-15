@@ -1,15 +1,17 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getGame } from '@/lib/games/registry'
 import type { GameState, Move } from '@/lib/games/types'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
 export function useGameRoom(roomId: string, playerId: string) {
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [room, setRoom] = useState<any>(null)
   const [players, setPlayers] = useState<any[]>([])
   const supabase = createClient()
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -48,7 +50,12 @@ export function useGameRoom(roomId: string, playerId: string) {
       })
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    channelRef.current = channel
+
+    return () => {
+      channelRef.current = null
+      supabase.removeChannel(channel)
+    }
   }, [roomId])
 
   const makeMove = useCallback(async (move: Move) => {
@@ -60,12 +67,13 @@ export function useGameRoom(roomId: string, playerId: string) {
     const newState = game.applyMove(gameState, playerId, move)
     setGameState(newState)
 
-    const channel = supabase.channel(`room:${roomId}`)
-    await channel.send({
-      type: 'broadcast',
-      event: 'move',
-      payload: { state: newState, move, playerId },
-    })
+    if (channelRef.current) {
+      await channelRef.current.send({
+        type: 'broadcast',
+        event: 'move',
+        payload: { state: newState, move, playerId },
+      })
+    }
 
     await supabase.from('game_states').upsert({
       room_id: roomId,
@@ -79,7 +87,7 @@ export function useGameRoom(roomId: string, playerId: string) {
       player_id: playerId,
       move_json: move,
     })
-  }, [gameState, room, playerId, roomId])
+  }, [gameState, room, playerId, roomId, supabase])
 
   const startGame = useCallback(async () => {
     if (!room || !players.length) return
@@ -90,12 +98,13 @@ export function useGameRoom(roomId: string, playerId: string) {
 
     setGameState(initialState)
 
-    const channel = supabase.channel(`room:${roomId}`)
-    await channel.send({
-      type: 'broadcast',
-      event: 'game_start',
-      payload: { state: initialState },
-    })
+    if (channelRef.current) {
+      await channelRef.current.send({
+        type: 'broadcast',
+        event: 'game_start',
+        payload: { state: initialState },
+      })
+    }
 
     await supabase.from('game_states').upsert({
       room_id: roomId,
@@ -104,7 +113,7 @@ export function useGameRoom(roomId: string, playerId: string) {
     })
 
     await supabase.from('rooms').update({ status: 'playing' }).eq('id', roomId)
-  }, [room, players, roomId])
+  }, [room, players, roomId, supabase])
 
   return { gameState, room, players, makeMove, startGame }
 }

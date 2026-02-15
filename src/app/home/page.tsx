@@ -1,17 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useFamily } from '@/lib/hooks/use-family'
 import { createClient } from '@/lib/supabase/client'
 import { requestNotificationPermission, sendBrowserNotification } from '@/lib/notifications'
 import { AddMemberDialog } from './add-member-dialog'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
 export default function HomePage() {
   const { players, loading } = useFamily()
   const [showAddMember, setShowAddMember] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   // Request notification permission for parents
   useEffect(() => {
@@ -21,22 +23,27 @@ export default function HomePage() {
     }
   }, [players])
 
-  // Listen for kid login events
+  // Listen for kid login events and store channel ref for sending
   useEffect(() => {
     if (!players.length) return
-
-    const parent = players.find(p => p.is_parent)
-    if (!parent) return
 
     const channel = supabase
       .channel(`family-presence`)
       .on('broadcast', { event: 'player_login' }, (payload) => {
-        const { playerName } = payload.payload
-        sendBrowserNotification('FamJam', `${playerName} just opened FamJam!`)
+        const parent = players.find(p => p.is_parent)
+        if (parent) {
+          const { playerName } = payload.payload
+          sendBrowserNotification('FamJam', `${playerName} just opened FamJam!`)
+        }
       })
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    channelRef.current = channel
+
+    return () => {
+      channelRef.current = null
+      supabase.removeChannel(channel)
+    }
   }, [players])
 
   function selectPlayer(playerId: string) {
@@ -45,14 +52,12 @@ export default function HomePage() {
 
     // Broadcast login event for non-parent players
     const player = players.find(p => p.id === playerId)
-    if (player && !player.is_parent) {
-      supabase
-        .channel('family-presence')
-        .send({
-          type: 'broadcast',
-          event: 'player_login',
-          payload: { playerId, playerName: player.display_name },
-        })
+    if (player && !player.is_parent && channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'player_login',
+        payload: { playerId, playerName: player.display_name },
+      })
     }
 
     router.push('/lobby')
