@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Ear tufts -->
+  <polygon points="22,30 12,4 36,24" fill="#7B5EA7"/>
+  <polygon points="78,30 88,4 64,24" fill="#7B5EA7"/>
+  <!-- Face -->
+  <circle cx="50" cy="54" r="35" fill="#9B7EC8"/>
+  <!-- Eye circles -->
+  <circle cx="36" cy="48" r="13" fill="#E8DFF5"/>
+  <circle cx="64" cy="48" r="13" fill="#E8DFF5"/>
+  <!-- Eyes -->
+  <circle cx="36" cy="48" r="7" fill="#F5A623"/>
+  <circle cx="64" cy="48" r="7" fill="#F5A623"/>
+  <circle cx="36" cy="48" r="4" fill="#1A1A1A"/>
+  <circle cx="64" cy="48" r="4" fill="#1A1A1A"/>
+  <circle cx="38" cy="46" r="1.5" fill="#fff"/>
+  <circle cx="66" cy="46" r="1.5" fill="#fff"/>
+  <!-- Beak -->
+  <polygon points="50,56 46,64 54,64" fill="#F5A623"/>
+  <!-- Belly patch -->
+  <ellipse cx="50" cy="76" rx="16" ry="10" fill="#E8DFF5"/>
+</svg>

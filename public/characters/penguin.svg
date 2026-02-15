@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Body -->
+  <ellipse cx="50" cy="58" r="36" fill="#2C2C3A"/>
+  <!-- White belly -->
+  <ellipse cx="50" cy="64" rx="22" ry="24" fill="#FFFFFF"/>
+  <!-- Eyes -->
+  <circle cx="38" cy="44" r="6" fill="#fff"/>
+  <circle cx="62" cy="44" r="6" fill="#fff"/>
+  <circle cx="39" cy="45" r="3.5" fill="#1A1A1A"/>
+  <circle cx="63" cy="45" r="3.5" fill="#1A1A1A"/>
+  <circle cx="40" cy="43.5" r="1.2" fill="#fff"/>
+  <circle cx="64" cy="43.5" r="1.2" fill="#fff"/>
+  <!-- Beak -->
+  <polygon points="50,50 44,56 56,56" fill="#F5A623"/>
+  <!-- Blush -->
+  <ellipse cx="34" cy="54" rx="5" ry="3" fill="#FFB0C0" opacity="0.5"/>
+  <ellipse cx="66" cy="54" rx="5" ry="3" fill="#FFB0C0" opacity="0.5"/>
+  <!-- Feet -->
+  <ellipse cx="40" cy="92" rx="8" ry="4" fill="#F5A623"/>
+  <ellipse cx="60" cy="92" rx="8" ry="4" fill="#F5A623"/>
+</svg>
