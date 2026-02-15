@@ -1,18 +1,60 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useFamily } from '@/lib/hooks/use-family'
+import { createClient } from '@/lib/supabase/client'
+import { requestNotificationPermission, sendBrowserNotification } from '@/lib/notifications'
 import { AddMemberDialog } from './add-member-dialog'
 
 export default function HomePage() {
   const { players, loading } = useFamily()
   const [showAddMember, setShowAddMember] = useState(false)
   const router = useRouter()
+  const supabase = createClient()
+
+  // Request notification permission for parents
+  useEffect(() => {
+    const parent = players.find(p => p.is_parent)
+    if (parent) {
+      requestNotificationPermission()
+    }
+  }, [players])
+
+  // Listen for kid login events
+  useEffect(() => {
+    if (!players.length) return
+
+    const parent = players.find(p => p.is_parent)
+    if (!parent) return
+
+    const channel = supabase
+      .channel(`family-presence`)
+      .on('broadcast', { event: 'player_login' }, (payload) => {
+        const { playerName } = payload.payload
+        sendBrowserNotification('FamJam', `${playerName} just opened FamJam!`)
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [players])
 
   function selectPlayer(playerId: string) {
     // Store active player in sessionStorage (per-tab, supports multi-device)
     sessionStorage.setItem('activePlayerId', playerId)
+
+    // Broadcast login event for non-parent players
+    const player = players.find(p => p.id === playerId)
+    if (player && !player.is_parent) {
+      supabase
+        .channel('family-presence')
+        .send({
+          type: 'broadcast',
+          event: 'player_login',
+          payload: { playerId, playerName: player.display_name },
+        })
+    }
+
     router.push('/lobby')
   }
 
