@@ -1,8 +1,10 @@
 import type { GameDefinition } from './types'
 import { ticTacToe } from './tic-tac-toe'
+import { sos } from './sos'
 
 const games: Record<string, GameDefinition> = {
   'tic-tac-toe': ticTacToe,
+  'sos': sos,
 }
 
 export function getGame(id: string): GameDefinition {
