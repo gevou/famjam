@@ -11,23 +11,13 @@ export async function createFamily(formData: FormData) {
   const displayName = formData.get('displayName') as string
   const characterId = formData.get('characterId') as string
 
-  // Create family
-  const { data: family } = await supabase
-    .from('families')
-    .insert({})
-    .select()
-    .single()
-
-  if (!family) throw new Error('Failed to create family')
-
-  // Create parent player
-  await supabase.from('players').insert({
-    family_id: family.id,
-    display_name: displayName,
-    character_id: characterId,
-    is_parent: true,
-    google_id: user.id,
+  const { data: familyId, error } = await supabase.rpc('create_family_with_parent', {
+    p_display_name: displayName,
+    p_character_id: characterId,
+    p_google_id: user.id,
   })
+
+  if (error) throw new Error(`Failed to create family: ${error.message}`)
 
   redirect('/home')
 }

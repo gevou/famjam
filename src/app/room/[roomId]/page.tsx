@@ -7,6 +7,7 @@ import { VideoChat } from '@/components/video-chat'
 import { TicTacToeBoard } from '@/components/games/tic-tac-toe-board'
 import { SOSBoard } from '@/components/games/sos-board'
 import { getGame } from '@/lib/games/registry'
+import Link from 'next/link'
 
 const BOARD_COMPONENTS: Record<string, any> = {
   'tic-tac-toe': TicTacToeBoard,
@@ -22,6 +23,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
 
   const currentPlayer = players.find((rp: any) => rp.players.id === playerId)
   const playerName = currentPlayer?.players?.display_name || 'Player'
+  const playerAvatar = currentPlayer?.players?.characters?.image_url
 
   const gameStatus = gameState && room ? getGame(room.game_type).getStatus(gameState) : null
   const BoardComponent = room ? BOARD_COMPONENTS[room.game_type] : null
@@ -29,11 +31,27 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-500 to-purple-600 p-4">
       <div className="max-w-2xl mx-auto space-y-4">
+        <div className="flex justify-between items-center">
+          <Link
+            href="/lobby"
+            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition"
+          >
+            &larr; Leave
+          </Link>
+          <div className="flex items-center gap-2">
+            {playerAvatar && <img src={playerAvatar} alt="" className="w-8 h-8" />}
+            <span className="text-white font-semibold">{playerName}</span>
+            <span className="text-white/60 mx-1">&middot;</span>
+            <span className="text-white/80 text-sm">{room ? getGame(room.game_type).name : '...'}</span>
+          </div>
+          <div className="w-20" />
+        </div>
         <VideoChat
           roomId={roomId}
           playerId={playerId}
           playerName={playerName}
           activeTurnPlayerId={gameState?.currentTurn}
+          roomPlayers={players}
         />
 
         {!gameState && (

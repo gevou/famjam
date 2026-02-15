@@ -13,33 +13,38 @@ export function useGameRoom(roomId: string, playerId: string) {
   const supabase = createClient()
   const channelRef = useRef<RealtimeChannel | null>(null)
 
+  // Reusable loaders
+  const loadPlayers = useCallback(async () => {
+    const { data } = await supabase
+      .from('room_players')
+      .select('*, players(id, display_name, character_id, characters(name, image_url))')
+      .eq('room_id', roomId)
+      .order('seat_number')
+    if (data) setPlayers(data)
+  }, [roomId, supabase])
+
+  const loadGameState = useCallback(async () => {
+    const { data } = await supabase
+      .from('game_states')
+      .select('*')
+      .eq('room_id', roomId)
+      .single()
+    if (data) setGameState(data.state_json)
+  }, [roomId, supabase])
+
+  const loadRoom = useCallback(async () => {
+    const { data } = await supabase
+      .from('rooms')
+      .select('*')
+      .eq('id', roomId)
+      .single()
+    if (data) setRoom(data)
+  }, [roomId, supabase])
+
   useEffect(() => {
-    async function load() {
-      const { data: roomData } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('id', roomId)
-        .single()
-      setRoom(roomData)
-
-      const { data: roomPlayers } = await supabase
-        .from('room_players')
-        .select('*, players(id, display_name, character_id, characters(name, image_url))')
-        .eq('room_id', roomId)
-        .order('seat_number')
-      setPlayers(roomPlayers || [])
-
-      const { data: stateData } = await supabase
-        .from('game_states')
-        .select('*')
-        .eq('room_id', roomId)
-        .single()
-
-      if (stateData) {
-        setGameState(stateData.state_json)
-      }
-    }
-    load()
+    loadRoom()
+    loadPlayers()
+    loadGameState()
 
     const channel = supabase.channel(`room:${roomId}`)
       .on('broadcast', { event: 'move' }, ({ payload }) => {
@@ -47,13 +52,24 @@ export function useGameRoom(roomId: string, playerId: string) {
       })
       .on('broadcast', { event: 'game_start' }, ({ payload }) => {
         setGameState(payload.state)
+        loadRoom() // refresh room status
+      })
+      .on('broadcast', { event: 'player_joined' }, () => {
+        loadPlayers()
       })
       .subscribe()
 
     channelRef.current = channel
 
+    // Poll for player joins every 3s as fallback
+    const pollInterval = setInterval(() => {
+      loadPlayers()
+      loadGameState()
+    }, 3000)
+
     return () => {
       channelRef.current = null
+      clearInterval(pollInterval)
       supabase.removeChannel(channel)
     }
   }, [roomId])
