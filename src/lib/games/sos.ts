@@ -1,39 +1,55 @@
-import type { GameDefinition, GameState, Move, GameStatus } from './types'
+import type { GameDefinition, GameState, Move, GameStatus, WinLine } from './types'
 
 const DIRECTIONS: [number, number][] = [
   [0, 1], [1, 0], [1, 1], [1, -1],
 ]
 
-function countNewSOS(board: (string | null)[], size: number, position: number): number {
+function findNewSOS(board: (string | null)[], size: number, position: number): number[][] {
   const row = Math.floor(position / size)
   const col = position % size
   const letter = board[position]
-  let count = 0
+  const patterns: number[][] = []
 
   for (const [dr, dc] of DIRECTIONS) {
     if (letter === 'S') {
+      // Check if this S is the START of S-O-S (look forward: +1, +2)
       const oRow = row + dr, oCol = col + dc
       const sRow = row + 2 * dr, sCol = col + 2 * dc
       if (sRow >= 0 && sRow < size && sCol >= 0 && sCol < size &&
           oRow >= 0 && oRow < size && oCol >= 0 && oCol < size) {
-        if (board[oRow * size + oCol] === 'O' && board[sRow * size + sCol] === 'S') count++
+        const oIdx = oRow * size + oCol
+        const sIdx = sRow * size + sCol
+        if (board[oIdx] === 'O' && board[sIdx] === 'S') {
+          patterns.push([position, oIdx, sIdx])
+        }
       }
+      // Check if this S is the END of S-O-S (look backward: -1, -2)
       const oRow2 = row - dr, oCol2 = col - dc
       const sRow2 = row - 2 * dr, sCol2 = col - 2 * dc
       if (sRow2 >= 0 && sRow2 < size && sCol2 >= 0 && sCol2 < size &&
           oRow2 >= 0 && oRow2 < size && oCol2 >= 0 && oCol2 < size) {
-        if (board[oRow2 * size + oCol2] === 'O' && board[sRow2 * size + sCol2] === 'S') count++
+        const oIdx2 = oRow2 * size + oCol2
+        const sIdx2 = sRow2 * size + sCol2
+        if (board[oIdx2] === 'O' && board[sIdx2] === 'S') {
+          patterns.push([sIdx2, oIdx2, position])
+        }
       }
     } else if (letter === 'O') {
+      // Check if this O is the MIDDLE of S-O-S (look both sides: -1 and +1)
       const sRow1 = row - dr, sCol1 = col - dc
       const sRow2 = row + dr, sCol2 = col + dc
       if (sRow1 >= 0 && sRow1 < size && sCol1 >= 0 && sCol1 < size &&
           sRow2 >= 0 && sRow2 < size && sCol2 >= 0 && sCol2 < size) {
-        if (board[sRow1 * size + sCol1] === 'S' && board[sRow2 * size + sCol2] === 'S') count++
+        const sIdx1 = sRow1 * size + sCol1
+        const sIdx2 = sRow2 * size + sCol2
+        if (board[sIdx1] === 'S' && board[sIdx2] === 'S') {
+          patterns.push([sIdx1, position, sIdx2])
+        }
       }
     }
   }
-  return count
+
+  return patterns
 }
 
 export const sos: GameDefinition = {
@@ -54,6 +70,7 @@ export const sos: GameDefinition = {
       currentTurnIndex: 0,
       currentTurn: playerIds[0],
       scores,
+      lines: [] as WinLine[],
     }
   },
 
@@ -69,12 +86,17 @@ export const sos: GameDefinition = {
   applyMove(state: GameState, playerId: string, move: Move): GameState {
     const board = [...state.board]
     board[move.position] = move.letter
-    const newSOS = countNewSOS(board, state.size, move.position)
+    const newPatterns = findNewSOS(board, state.size, move.position)
     const scores = { ...state.scores }
-    scores[playerId] = (scores[playerId] || 0) + newSOS
+    scores[playerId] = (scores[playerId] || 0) + newPatterns.length
+
+    const lines: WinLine[] = [
+      ...(state.lines || []),
+      ...newPatterns.map(cells => ({ cells, player: playerId })),
+    ]
 
     let nextIndex = state.currentTurnIndex
-    if (newSOS === 0) {
+    if (newPatterns.length === 0) {
       nextIndex = (state.currentTurnIndex + 1) % state.playerOrder.length
     }
 
@@ -82,6 +104,7 @@ export const sos: GameDefinition = {
       ...state,
       board,
       scores,
+      lines,
       currentTurnIndex: nextIndex,
       currentTurn: state.playerOrder[nextIndex],
     }

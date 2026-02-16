@@ -17,7 +17,7 @@ const BOARD_COMPONENTS: Record<string, any> = {
 export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = use(params)
   const playerId = useActivePlayer()
-  const { gameState, room, players, makeMove, startGame } = useGameRoom(roomId, playerId || '')
+  const { gameState, room, players, makeMove, startGame, onDataMessage, setSendData } = useGameRoom(roomId, playerId || '')
 
   if (!playerId) return <div className="min-h-screen flex items-center justify-center text-white">No player selected</div>
 
@@ -27,6 +27,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
 
   const gameStatus = gameState && room ? getGame(room.game_type).getStatus(gameState) : null
   const BoardComponent = room ? BOARD_COMPONENTS[room.game_type] : null
+
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-500 to-purple-600 p-4">
@@ -52,6 +53,8 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
           playerName={playerName}
           activeTurnPlayerId={gameState?.currentTurn}
           roomPlayers={players}
+          onDataMessage={onDataMessage}
+          setSendData={setSendData}
         />
 
         {!gameState && (
@@ -77,8 +80,8 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
           </div>
         )}
 
-        {gameState && !gameStatus?.finished && BoardComponent && (
-          <BoardComponent state={gameState} playerId={playerId} onMove={makeMove} />
+        {gameState && BoardComponent && (
+          <BoardComponent state={gameState} playerId={playerId} onMove={makeMove} gameStatus={gameStatus} />
         )}
 
         {gameStatus?.finished && (

@@ -40,7 +40,7 @@ export const ticTacToe: GameDefinition = {
     for (const [a, b, c] of WIN_LINES) {
       if (state.board[a] && state.board[a] === state.board[b] && state.board[b] === state.board[c]) {
         const winnerMark = state.board[a]
-        return { finished: true, winner: state.players[winnerMark] }
+        return { finished: true, winner: state.players[winnerMark], winLine: [a, b, c] }
       }
     }
     if (state.board.every((cell: string | null) => cell !== null)) {

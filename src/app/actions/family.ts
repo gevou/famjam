@@ -22,6 +22,37 @@ export async function createFamily(formData: FormData) {
   redirect('/home')
 }
 
+export async function inviteFamilyMember(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  // Get parent's family
+  const { data: parent } = await supabase
+    .from('players')
+    .select('id, family_id')
+    .eq('google_id', user.id)
+    .eq('is_parent', true)
+    .single()
+
+  if (!parent) throw new Error('Not a parent')
+
+  const email = (formData.get('email') as string).trim().toLowerCase()
+  const isParent = formData.get('isParent') === 'true'
+
+  const { error } = await supabase.from('family_invites').insert({
+    family_id: parent.family_id,
+    invited_email: email,
+    invited_by: parent.id,
+    is_parent: isParent,
+  })
+
+  if (error) {
+    if (error.code === '23505') throw new Error('Already invited')
+    throw new Error(`Failed to invite: ${error.message}`)
+  }
+}
+
 export async function addFamilyMember(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

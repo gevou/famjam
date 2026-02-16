@@ -28,6 +28,66 @@ The repository is clean with no uncommitted changes. No design documents exist i
 
 <!-- New entries go above this line, newest first -->
 
+### 2026-02-15 — Bug Fixes and Family Invites
+
+**Branch:** main
+
+**What was done:**
+- Added email-based family invites: `family_invites` table, `accept_pending_invites` RPC, auto-join on auth callback
+- Added tabbed UI in add-member dialog for existing family members vs. email invites
+- Fixed tic-tac-toe move flash/disappear bug (polling race condition with optimistic updates)
+- Fixed tic-tac-toe CSS (stable cell sizes, internal grid lines)
+- Fixed audio not playing (AudioTrack only rendered in lite mode)
+- Fixed mute mic button (switched from LiveKitRoom prop to useLocalParticipant imperative API)
+- Added presence chips showing connected/disconnected players using LiveKit participants
+- Added back button to lobby
+- Added player names/avatars to lobby room cards
+
+**Why:**
+- Discovered Supabase Realtime broadcast not working (server acks but doesn't relay messages) — switched game sync to LiveKit data messages for reliability
+- Optimistic updates in tic-tac-toe were conflicting with polling interval, causing moves to flash and disappear
+- Video chat component was only rendering AudioTrack in lite mode, breaking audio in standard mode
+- Mute control needed direct participant API access instead of declarative props
+
+**What's next:**
+- Investigate Supabase Realtime broadcast issue (migration 007 added RLS policies but didn't fix it)
+- Consider removing Supabase Realtime dependency entirely if LiveKit data messages prove sufficient
+- End-to-end testing with real devices (iPad Mini 2)
+
+### 2026-02-15 — Feature Complete (12/13 tasks done)
+
+**What was done:**
+- Completed all 12 implementation tasks using parallel agent dispatching (beads for tracking)
+- Wave 1 (4 parallel): Supabase client, DB schema, game engine + TTT, character SVGs
+- Wave 2 (3 parallel): Google sign-in, S.O.S. game, LiveKit token endpoint
+- Wave 3 (1): Family onboarding
+- Wave 4 (1): Family home screen (player select)
+- Wave 5 (2 parallel): Lobby + room creation, parent notifications
+- Wave 6 (1): Game room with video chat + game boards
+
+**Key files by feature:**
+- **Auth:** `src/lib/supabase/{client,server,middleware}.ts`, `src/middleware.ts`, `src/app/auth/callback/route.ts`, `src/app/login/page.tsx`
+- **Database:** `supabase/migrations/001_initial_schema.sql` (7 tables, RLS, seed data)
+- **Family:** `src/app/actions/family.ts`, `src/app/onboarding/page.tsx`, `src/app/home/page.tsx`, `src/lib/hooks/use-family.ts`
+- **Games:** `src/lib/games/{types,tic-tac-toe,sos,registry}.ts` (23 tests)
+- **Lobby:** `src/app/lobby/page.tsx`, `src/app/actions/rooms.ts`, `src/lib/hooks/use-active-player.ts`
+- **Game room:** `src/app/room/[roomId]/page.tsx`, `src/components/video-chat.tsx`, `src/components/games/{tic-tac-toe-board,sos-board}.tsx`, `src/lib/hooks/use-game-room.ts`
+- **Notifications:** `src/lib/notifications.ts`
+- **Assets:** `public/characters/*.svg` (8 animals)
+
+**Quality gates:** 23/23 tests passing, `next build` clean, all TypeScript checks pass.
+
+**Issues encountered:**
+- `@livekit/components-styles` is a separate package (not bundled with `@livekit/components-react`) — agent self-fixed
+- `@supabase/ssr` not pre-installed — agent self-fixed
+- Next.js 16 middleware deprecation warning (functional, cosmetic only)
+
+**What's next:**
+- **famjam-xay:** Manual end-to-end smoke test — requires Supabase project + Google OAuth + LiveKit Cloud credentials in `.env.local`, then run `npm run dev` and test the full flow
+- Future: AI game host, more games, deployment
+
+---
+
 ### 2026-02-15 — Project Kickoff
 
 **What was done:**

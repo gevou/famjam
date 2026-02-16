@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useActivePlayer } from '@/lib/hooks/use-active-player'
 import { listGames } from '@/lib/games/registry'
 import { createRoom, joinRoom } from '@/app/actions/rooms'
+import Link from 'next/link'
 
 type Room = {
   id: string
@@ -14,7 +15,7 @@ type Room = {
   status: string
   created_by: string
   players: { display_name: string }
-  room_players: { player_id: string }[]
+  room_players: { player_id: string; players: { display_name: string; characters: { image_url: string } | null } }[]
 }
 
 export default function LobbyPage() {
@@ -40,7 +41,7 @@ export default function LobbyPage() {
 
       const { data } = await supabase
         .from('rooms')
-        .select('*, players!rooms_created_by_fkey(display_name), room_players(player_id)')
+        .select('*, players!rooms_created_by_fkey(display_name), room_players(player_id, players(display_name, characters(image_url)))')
         .eq('family_id', player.family_id)
         .in('status', ['waiting', 'playing'])
         .order('created_at', { ascending: false })
@@ -84,7 +85,15 @@ export default function LobbyPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-500 to-purple-600 p-8">
       <div className="max-w-lg mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-6">Game Lobby</h1>
+        <div className="flex items-center gap-4 mb-6">
+          <Link
+            href="/home"
+            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition"
+          >
+            &larr; Home
+          </Link>
+          <h1 className="text-3xl font-bold text-white">Game Lobby</h1>
+        </div>
 
         {/* Active rooms */}
         <div className="space-y-3 mb-8">
@@ -97,9 +106,19 @@ export default function LobbyPage() {
                 <p className="text-white font-semibold">
                   {games.find(g => g.id === room.game_type)?.name || room.game_type}
                 </p>
-                <p className="text-indigo-200 text-sm">
-                  {room.players?.display_name} &middot; {room.room_players?.length}/{room.max_players} players
-                </p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  {room.room_players?.map((rp) => (
+                    <div key={rp.player_id} className="flex items-center gap-1 bg-white/10 rounded-full px-2 py-0.5">
+                      {rp.players?.characters?.image_url && (
+                        <img src={rp.players.characters.image_url} alt="" className="w-4 h-4" />
+                      )}
+                      <span className="text-indigo-100 text-xs">{rp.players?.display_name}</span>
+                    </div>
+                  ))}
+                  {room.room_players.length < room.max_players && (
+                    <span className="text-indigo-300 text-xs">+{room.max_players - room.room_players.length} needed</span>
+                  )}
+                </div>
               </div>
               {room.status === 'waiting' && !room.room_players?.some(rp => rp.player_id === playerId) && (
                 <button

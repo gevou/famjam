@@ -4,14 +4,21 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getGame } from '@/lib/games/registry'
 import type { GameState, Move } from '@/lib/games/types'
-import type { RealtimeChannel } from '@supabase/supabase-js'
+
+export type DataMessage = {
+  event: 'move' | 'game_start'
+  payload: any
+}
+
+export type SendDataFn = (msg: DataMessage) => void
 
 export function useGameRoom(roomId: string, playerId: string) {
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [room, setRoom] = useState<any>(null)
   const [players, setPlayers] = useState<any[]>([])
   const supabase = createClient()
-  const channelRef = useRef<RealtimeChannel | null>(null)
+  const sendDataRef = useRef<SendDataFn | null>(null)
+  const lastMoveAt = useRef<number>(0)
 
   // Reusable loaders
   const loadPlayers = useCallback(async () => {
@@ -28,7 +35,7 @@ export function useGameRoom(roomId: string, playerId: string) {
       .from('game_states')
       .select('*')
       .eq('room_id', roomId)
-      .single()
+      .maybeSingle()
     if (data) setGameState(data.state_json)
   }, [roomId, supabase])
 
@@ -46,33 +53,33 @@ export function useGameRoom(roomId: string, playerId: string) {
     loadPlayers()
     loadGameState()
 
-    const channel = supabase.channel(`room:${roomId}`)
-      .on('broadcast', { event: 'move' }, ({ payload }) => {
-        setGameState(payload.state)
-      })
-      .on('broadcast', { event: 'game_start' }, ({ payload }) => {
-        setGameState(payload.state)
-        loadRoom() // refresh room status
-      })
-      .on('broadcast', { event: 'player_joined' }, () => {
-        loadPlayers()
-      })
-      .subscribe()
-
-    channelRef.current = channel
-
-    // Poll for player joins every 3s as fallback
+    // Poll for data as fallback (still useful for player list updates)
     const pollInterval = setInterval(() => {
       loadPlayers()
-      loadGameState()
+      if (Date.now() - lastMoveAt.current > 5000) {
+        loadGameState()
+      }
     }, 3000)
 
     return () => {
-      channelRef.current = null
       clearInterval(pollInterval)
-      supabase.removeChannel(channel)
     }
-  }, [roomId])
+  }, [roomId, playerId])
+
+  // Called by VideoChat when it receives a data message from LiveKit
+  const onDataMessage = useCallback((msg: DataMessage) => {
+    if (msg.event === 'move') {
+      setGameState(msg.payload.state)
+    } else if (msg.event === 'game_start') {
+      setGameState(msg.payload.state)
+      loadRoom()
+    }
+  }, [loadRoom])
+
+  // Register the send function (set by VideoChat from inside LiveKitRoom context)
+  const setSendData = useCallback((fn: SendDataFn) => {
+    sendDataRef.current = fn
+  }, [])
 
   const makeMove = useCallback(async (move: Move) => {
     if (!gameState || !room) return
@@ -82,15 +89,15 @@ export function useGameRoom(roomId: string, playerId: string) {
 
     const newState = game.applyMove(gameState, playerId, move)
     setGameState(newState)
+    lastMoveAt.current = Date.now()
 
-    if (channelRef.current) {
-      await channelRef.current.send({
-        type: 'broadcast',
-        event: 'move',
-        payload: { state: newState, move, playerId },
-      })
-    }
+    // Send via LiveKit data channel
+    sendDataRef.current?.({
+      event: 'move',
+      payload: { state: newState, move, playerId },
+    })
 
+    // Persist to database
     await supabase.from('game_states').upsert({
       room_id: roomId,
       state_json: newState,
@@ -113,14 +120,13 @@ export function useGameRoom(roomId: string, playerId: string) {
     const initialState = game.initialState(playerIds)
 
     setGameState(initialState)
+    lastMoveAt.current = Date.now()
 
-    if (channelRef.current) {
-      await channelRef.current.send({
-        type: 'broadcast',
-        event: 'game_start',
-        payload: { state: initialState },
-      })
-    }
+    // Send via LiveKit data channel
+    sendDataRef.current?.({
+      event: 'game_start',
+      payload: { state: initialState },
+    })
 
     await supabase.from('game_states').upsert({
       room_id: roomId,
@@ -131,5 +137,5 @@ export function useGameRoom(roomId: string, playerId: string) {
     await supabase.from('rooms').update({ status: 'playing' }).eq('id', roomId)
   }, [room, players, roomId, supabase])
 
-  return { gameState, room, players, makeMove, startGame }
+  return { gameState, room, players, makeMove, startGame, onDataMessage, setSendData }
 }

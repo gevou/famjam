@@ -6,11 +6,17 @@ export interface Move {
   [key: string]: any
 }
 
+export interface WinLine {
+  cells: number[]
+  player: string
+}
+
 export interface GameStatus {
   finished: boolean
   winner?: string
   scores?: Record<string, number>
   extraTurn?: boolean
+  winLine?: number[]
 }
 
 export interface GameDefinition {
