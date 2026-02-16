@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useFamily } from '@/lib/hooks/use-family'
 import { createClient } from '@/lib/supabase/client'
-import { requestNotificationPermission, sendBrowserNotification } from '@/lib/notifications'
+import { requestNotificationPermission, sendBrowserNotification, subscribeToPush } from '@/lib/notifications'
 import { AddMemberDialog } from './add-member-dialog'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
@@ -15,11 +15,13 @@ export default function HomePage() {
   const supabase = createClient()
   const channelRef = useRef<RealtimeChannel | null>(null)
 
-  // Request notification permission for parents
+  // Request notification permission and register push for parents
   useEffect(() => {
     const parent = players.find(p => p.is_parent)
     if (parent) {
-      requestNotificationPermission()
+      requestNotificationPermission().then((granted) => {
+        if (granted) subscribeToPush()
+      })
     }
   }, [players])
 
