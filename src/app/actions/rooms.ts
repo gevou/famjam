@@ -2,6 +2,24 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+async function leaveOtherRooms(supabase: any, playerId: string) {
+  // Find all active rooms this player is in
+  const { data: currentEntries } = await supabase
+    .from('room_players')
+    .select('room_id, rooms!inner(status)')
+    .eq('player_id', playerId)
+    .in('rooms.status', ['waiting', 'playing'])
+
+  if (currentEntries?.length) {
+    const roomIds = currentEntries.map((e: any) => e.room_id)
+    await supabase
+      .from('room_players')
+      .delete()
+      .eq('player_id', playerId)
+      .in('room_id', roomIds)
+  }
+}
+
 export async function createRoom(formData: FormData) {
   const supabase = await createClient()
   const gameType = formData.get('gameType') as string
@@ -16,6 +34,9 @@ export async function createRoom(formData: FormData) {
     .single()
 
   if (!player) throw new Error('Player not found')
+
+  // Leave any other active rooms first
+  await leaveOtherRooms(supabase, playerId)
 
   const { data: room } = await supabase
     .from('rooms')
@@ -40,8 +61,21 @@ export async function createRoom(formData: FormData) {
   return room.id
 }
 
+export async function leaveRoom(roomId: string, playerId: string) {
+  const supabase = await createClient()
+
+  await supabase
+    .from('room_players')
+    .delete()
+    .eq('room_id', roomId)
+    .eq('player_id', playerId)
+}
+
 export async function joinRoom(roomId: string, playerId: string) {
   const supabase = await createClient()
+
+  // Leave any other active rooms first
+  await leaveOtherRooms(supabase, playerId)
 
   // Count current players
   const { count } = await supabase

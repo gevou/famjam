@@ -13,33 +13,35 @@ type Player = {
 
 export function useFamily() {
   const [players, setPlayers] = useState<Player[]>([])
+  const [isParent, setIsParent] = useState(false)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+  async function load() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-      const { data: parent } = await supabase
-        .from('players')
-        .select('family_id')
-        .eq('google_id', user.id)
-        .single()
+    const { data: parent } = await supabase
+      .from('players')
+      .select('family_id, is_parent')
+      .eq('google_id', user.id)
+      .single()
 
-      if (!parent) return
+    if (!parent) return
 
-      const { data } = await supabase
-        .from('players')
-        .select('*, characters(name, image_url)')
-        .eq('family_id', parent.family_id)
-        .order('created_at')
+    setIsParent(parent.is_parent)
 
-      if (data) setPlayers(data as any)
-      setLoading(false)
-    }
-    load()
-  }, [])
+    const { data } = await supabase
+      .from('players')
+      .select('*, characters(name, image_url)')
+      .eq('family_id', parent.family_id)
+      .order('created_at')
 
-  return { players, loading }
+    if (data) setPlayers(data as any)
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  return { players, isParent, loading, refresh: load }
 }

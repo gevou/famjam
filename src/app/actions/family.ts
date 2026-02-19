@@ -53,6 +53,33 @@ export async function inviteFamilyMember(formData: FormData) {
   }
 }
 
+export async function updatePlayer(playerId: string, newName: string, newCharacterId?: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  // Verify caller is a parent in the same family
+  const { data: parent } = await supabase
+    .from('players')
+    .select('family_id')
+    .eq('google_id', user.id)
+    .eq('is_parent', true)
+    .single()
+
+  if (!parent) throw new Error('Not a parent')
+
+  const updates: Record<string, string> = { display_name: newName.trim() }
+  if (newCharacterId) updates.character_id = newCharacterId
+
+  const { error } = await supabase
+    .from('players')
+    .update(updates)
+    .eq('id', playerId)
+    .eq('family_id', parent.family_id)
+
+  if (error) throw new Error(`Failed to update name: ${error.message}`)
+}
+
 export async function addFamilyMember(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

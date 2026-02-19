@@ -1,51 +1,64 @@
 'use client'
 
-import { use } from 'react'
+import { use, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useActivePlayer } from '@/lib/hooks/use-active-player'
 import { useGameRoom } from '@/lib/hooks/use-game-room'
 import { VideoChat } from '@/components/video-chat'
 import { TicTacToeBoard } from '@/components/games/tic-tac-toe-board'
 import { SOSBoard } from '@/components/games/sos-board'
+import { MonopolyBoard } from '@/components/games/monopoly-board'
 import { getGame } from '@/lib/games/registry'
-import Link from 'next/link'
+import { leaveRoom } from '@/app/actions/rooms'
+import { PlayerBanner } from '@/components/player-banner'
 
 const BOARD_COMPONENTS: Record<string, any> = {
   'tic-tac-toe': TicTacToeBoard,
   'sos': SOSBoard,
+  'monopoly': MonopolyBoard,
 }
 
 export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = use(params)
   const playerId = useActivePlayer()
   const { gameState, room, players, makeMove, startGame, onDataMessage, setSendData } = useGameRoom(roomId, playerId || '')
+  const router = useRouter()
+
+  const handleLeave = useCallback(async () => {
+    if (playerId) await leaveRoom(roomId, playerId)
+    router.push('/lobby')
+  }, [roomId, playerId, router])
+
+  // Clean up on tab close / browser navigation
+  useEffect(() => {
+    if (!playerId) return
+    const onBeforeUnload = () => {
+      navigator.sendBeacon(`/api/leave-room?room=${roomId}&player=${playerId}`)
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [roomId, playerId])
 
   if (!playerId) return <div className="min-h-screen flex items-center justify-center text-white">No player selected</div>
 
   const currentPlayer = players.find((rp: any) => rp.players.id === playerId)
   const playerName = currentPlayer?.players?.display_name || 'Player'
-  const playerAvatar = currentPlayer?.players?.characters?.image_url
 
   const gameStatus = gameState && room ? getGame(room.game_type).getStatus(gameState) : null
   const BoardComponent = room ? BOARD_COMPONENTS[room.game_type] : null
-
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-500 to-purple-600 p-4">
       <div className="max-w-2xl mx-auto space-y-4">
         <div className="flex justify-between items-center">
-          <Link
-            href="/lobby"
+          <button
+            onClick={handleLeave}
             className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition"
           >
             &larr; Leave
-          </Link>
-          <div className="flex items-center gap-2">
-            {playerAvatar && <img src={playerAvatar} alt="" className="w-8 h-8" />}
-            <span className="text-white font-semibold">{playerName}</span>
-            <span className="text-white/60 mx-1">&middot;</span>
-            <span className="text-white/80 text-sm">{room ? getGame(room.game_type).name : '...'}</span>
-          </div>
-          <div className="w-20" />
+          </button>
+          <span className="text-white/80 text-sm">{room ? getGame(room.game_type).name : '...'}</span>
+          <PlayerBanner />
         </div>
         <VideoChat
           roomId={roomId}
@@ -81,7 +94,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
         )}
 
         {gameState && BoardComponent && (
-          <BoardComponent state={gameState} playerId={playerId} onMove={makeMove} gameStatus={gameStatus} />
+          <BoardComponent state={gameState} playerId={playerId} onMove={makeMove} gameStatus={gameStatus} players={players} />
         )}
 
         {gameStatus?.finished && (

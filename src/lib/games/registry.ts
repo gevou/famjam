@@ -1,10 +1,12 @@
 import type { GameDefinition } from './types'
 import { ticTacToe } from './tic-tac-toe'
 import { sos } from './sos'
+import { monopoly } from './monopoly'
 
 const games: Record<string, GameDefinition> = {
   'tic-tac-toe': ticTacToe,
   'sos': sos,
+  'monopoly': monopoly,
 }
 
 export function getGame(id: string): GameDefinition {
