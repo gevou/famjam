@@ -72,9 +72,6 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
 
         {!gameState && (
           <div className="text-center space-y-4">
-            <p className="text-white text-lg">
-              Waiting for players... ({players.length}/{room?.max_players || '?'})
-            </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {players.map((rp: any) => (
                 <span key={rp.player_id} className="bg-white/20 text-white px-3 py-1 rounded-full text-sm">
@@ -82,14 +79,34 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                 </span>
               ))}
             </div>
-            {players.length >= (room?.max_players || 2) && (
+            {room && players.length >= (getGame(room.game_type).minPlayers) ? (
               <button
                 onClick={startGame}
                 className="bg-yellow-400 text-gray-900 px-8 py-3 rounded-xl text-lg font-bold"
               >
                 Start Game!
               </button>
+            ) : (
+              <p className="text-white/70 text-sm">
+                Waiting for players... ({players.length}/{room ? getGame(room.game_type).minPlayers : '?'})
+              </p>
             )}
+          </div>
+        )}
+
+        {!gameState && BoardComponent && room && (
+          <div className="opacity-60 pointer-events-none">
+            <BoardComponent
+              state={getGame(room.game_type).initialState(
+                players.length > 0
+                  ? players.map((rp: any) => rp.players.id)
+                  : [playerId]
+              )}
+              playerId={playerId}
+              onMove={() => {}}
+              gameStatus={null}
+              players={players}
+            />
           </div>
         )}
 
