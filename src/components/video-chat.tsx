@@ -87,10 +87,12 @@ export function VideoFeed({
   return (
     <div className={`relative rounded-xl overflow-hidden bg-gray-800 aspect-square ${ringClasses}`}>
       {videoTrack ? (
-        <VideoTrack
-          trackRef={videoTrack}
-          className={`w-full h-full ${cropMode ? 'object-cover' : 'object-contain'} ${isYou ? 'scale-x-[-1]' : ''}`}
-        />
+        <div className={`w-full h-full ${isYou ? 'scale-x-[-1]' : ''}`}>
+          <VideoTrack
+            trackRef={videoTrack}
+            style={{ objectFit: cropMode ? 'cover' : 'contain', width: '100%', height: '100%' }}
+          />
+        </div>
       ) : (
         <div className="w-full h-full flex items-center justify-center">
           {avatarUrl ? (

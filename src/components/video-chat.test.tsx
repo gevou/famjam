@@ -4,7 +4,7 @@ import { VideoFeed, CropToggle } from './video-chat'
 
 // Mock LiveKit components
 vi.mock('@livekit/components-react', () => ({
-  VideoTrack: ({ className }: any) => <div data-testid="video-track" className={className} />,
+  VideoTrack: ({ className, style }: any) => <div data-testid="video-track" className={className} style={style} />,
   useTracks: () => [],
   useParticipants: () => [],
   useLocalParticipant: () => ({ localParticipant: { isMicrophoneEnabled: true, setMicrophoneEnabled: vi.fn() } }),
@@ -35,16 +35,16 @@ describe('VideoFeed', () => {
     expect(feed.className).toContain('aspect-square')
   })
 
-  it('applies object-contain when cropMode is false (fit)', () => {
+  it('applies object-fit contain when cropMode is false (fit)', () => {
     render(<VideoFeed {...baseProps} videoTrack={{} as any} cropMode={false} />)
     const track = screen.getByTestId('video-track')
-    expect(track.className).toContain('object-contain')
+    expect(track.style.objectFit).toBe('contain')
   })
 
-  it('applies object-cover when cropMode is true (crop)', () => {
+  it('applies object-fit cover when cropMode is true (crop)', () => {
     render(<VideoFeed {...baseProps} videoTrack={{} as any} cropMode={true} />)
     const track = screen.getByTestId('video-track')
-    expect(track.className).toContain('object-cover')
+    expect(track.style.objectFit).toBe('cover')
   })
 
   it('shows winner effect with golden glow', () => {
