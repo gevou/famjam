@@ -160,7 +160,7 @@ function VideoGrid({
 
   return (
     <div>
-      <div className={`grid gap-2 ${visiblePlayers.length <= 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'}`}>
+      <div className="flex gap-2 overflow-x-auto px-2 py-1 justify-center">
         {visiblePlayers.map((rp) => {
           const pid = rp.players.id
           const player = rp.players
@@ -173,8 +173,8 @@ function VideoGrid({
           const micEnabled = participant?.isMicrophoneEnabled || false
 
           return (
+            <div key={pid} className="w-[20vh] shrink-0">
             <VideoFeed
-              key={pid}
               displayName={player.display_name}
               isConnected={isConnected}
               isActive={isActive}
@@ -186,6 +186,7 @@ function VideoGrid({
               cropMode={cropMode}
               resultEffect={playerEffects[pid]}
             />
+            </div>
           )
         })}
       </div>
