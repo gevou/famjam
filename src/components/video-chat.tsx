@@ -23,65 +23,123 @@ type RoomPlayer = {
   }
 }
 
-function AdaptiveVideoContainer({
-  trackRef,
-  mirror,
-  children,
+// --- Exported components ---
+
+export function VideoFeed({
+  displayName,
+  isConnected,
+  isActive,
+  isYou,
+  avatarUrl,
+  videoTrack,
+  isSpeaking,
+  micEnabled,
+  cropMode,
+  resultEffect,
 }: {
-  trackRef: any
-  mirror: boolean
-  children: React.ReactNode
+  displayName: string
+  isConnected: boolean
+  isActive: boolean
+  isYou: boolean
+  avatarUrl?: string
+  videoTrack: any | null
+  isSpeaking: boolean
+  micEnabled: boolean
+  cropMode: boolean
+  resultEffect?: 'winner' | 'loser'
 }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [portrait, setPortrait] = useState(false)
+  const ringClasses = resultEffect === 'winner'
+    ? 'ring-4 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)]'
+    : isActive
+      ? 'ring-4 ring-yellow-400'
+      : isSpeaking
+        ? 'ring-2 ring-green-400'
+        : ''
 
-  useEffect(() => {
-    const publication = trackRef.publication
-    const track = publication?.track
-    if (!track) return
-
-    function checkDimensions() {
-      const el = track?.attachedElements?.[0] as HTMLVideoElement | undefined
-      if (el && el.videoWidth && el.videoHeight) {
-        setPortrait(el.videoHeight > el.videoWidth)
-      }
-    }
-
-    // Check periodically until we get dimensions (video may not have loaded yet)
-    checkDimensions()
-    const interval = setInterval(checkDimensions, 500)
-    const timeout = setTimeout(() => clearInterval(interval), 10000)
-
-    return () => {
-      clearInterval(interval)
-      clearTimeout(timeout)
-    }
-  }, [trackRef])
+  const nameOverlay = (
+    <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2 pointer-events-none">
+      <div className={`flex items-center gap-1.5 backdrop-blur-sm px-3 py-1.5 rounded-full ${
+        isConnected ? 'bg-green-500/40' : 'bg-black/60'
+      }`}>
+        {avatarUrl && (
+          <img src={avatarUrl} alt="" className="w-5 h-5" />
+        )}
+        <span className={`text-sm font-medium ${isConnected ? 'text-green-200' : 'text-white/50'}`}>
+          {displayName}
+          {isYou && ' (You)'}
+        </span>
+        {isActive && (
+          <span className="text-yellow-400 text-xs font-bold ml-1">YOUR TURN</span>
+        )}
+        {isConnected && (
+          micEnabled ? (
+            <span className={`text-xs ml-1 ${isSpeaking ? 'text-green-400' : 'text-white/40'}`}>
+              {isSpeaking ? '🔊' : '🎤'}
+            </span>
+          ) : (
+            <span className="text-red-400 text-xs ml-1">🔇</span>
+          )
+        )}
+      </div>
+    </div>
+  )
 
   return (
-    <div
-      ref={containerRef}
-      className={`relative rounded-xl overflow-hidden bg-gray-800 ${portrait ? 'aspect-[3/4]' : 'aspect-video'}`}
-    >
-      <VideoTrack
-        trackRef={trackRef}
-        className={`w-full h-full object-cover ${mirror ? 'scale-x-[-1]' : ''}`}
-      />
-      {children}
+    <div className={`relative rounded-xl overflow-hidden bg-gray-800 aspect-square ${ringClasses}`}>
+      {videoTrack ? (
+        <VideoTrack
+          trackRef={videoTrack}
+          className={`w-full h-full ${cropMode ? 'object-cover' : 'object-contain'} ${isYou ? 'scale-x-[-1]' : ''}`}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className={`w-16 h-16 ${isConnected ? 'opacity-60' : 'opacity-20 grayscale'}`} />
+          ) : (
+            <div className="text-white/40 text-4xl">?</div>
+          )}
+        </div>
+      )}
+      {nameOverlay}
+      {resultEffect === 'winner' && (
+        <div data-testid="winner-crown" className="absolute top-1 left-1/2 -translate-x-1/2 text-2xl pointer-events-none">
+          👑
+        </div>
+      )}
+      {resultEffect === 'loser' && (
+        <div data-testid="loser-tint" className="absolute inset-0 bg-blue-900/30 pointer-events-none" />
+      )}
     </div>
   )
 }
+
+export function CropToggle({ cropMode, onToggle }: { cropMode: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className="px-3 py-2 rounded-lg text-sm font-semibold bg-white/20 text-white"
+    >
+      {cropMode ? 'Fit' : 'Crop'}
+    </button>
+  )
+}
+
+// --- Internal components ---
 
 function VideoGrid({
   activeTurnPlayerId,
   liteMode,
   roomPlayers,
   currentPlayerId,
+  cropMode,
+  playerEffects,
 }: {
   activeTurnPlayerId?: string
   liteMode: boolean
   roomPlayers: RoomPlayer[]
   currentPlayerId: string
+  cropMode: boolean
+  playerEffects: Record<string, 'winner' | 'loser'>
 }) {
   const participants = useParticipants()
   const tracks = useTracks([Track.Source.Camera, Track.Source.Microphone])
@@ -110,60 +168,24 @@ function VideoGrid({
           const isConnected = !!participant
           const isActive = pid === activeTurnPlayerId
           const isYou = pid === currentPlayerId
-          const cameraTrack = cameraByIdentity.get(pid)
+          const cameraTrack = cameraByIdentity.get(pid) || null
           const isSpeaking = participant?.isSpeaking || false
           const micEnabled = participant?.isMicrophoneEnabled || false
 
-          const nameOverlay = (
-            <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2 pointer-events-none">
-              <div className={`flex items-center gap-1.5 backdrop-blur-sm px-3 py-1.5 rounded-full ${
-                isConnected ? 'bg-green-500/40' : 'bg-black/60'
-              }`}>
-                {player.characters?.image_url && (
-                  <img src={player.characters.image_url} alt="" className="w-5 h-5" />
-                )}
-                <span className={`text-sm font-medium ${isConnected ? 'text-green-200' : 'text-white/50'}`}>
-                  {player.display_name}
-                  {isYou && ' (You)'}
-                </span>
-                {isActive && (
-                  <span className="text-yellow-400 text-xs font-bold ml-1">YOUR TURN</span>
-                )}
-                {isConnected && (
-                  micEnabled ? (
-                    <span className={`text-xs ml-1 ${isSpeaking ? 'text-green-400' : 'text-white/40'}`}>
-                      {isSpeaking ? '🔊' : '🎤'}
-                    </span>
-                  ) : (
-                    <span className="text-red-400 text-xs ml-1">🔇</span>
-                  )
-                )}
-              </div>
-            </div>
-          )
-
-          const ringClasses = `${isActive ? 'ring-4 ring-yellow-400' : ''} ${isSpeaking ? 'ring-2 ring-green-400' : ''}`
-
-          return cameraTrack ? (
-            <div key={pid} className={ringClasses + ' rounded-xl'}>
-              <AdaptiveVideoContainer trackRef={cameraTrack} mirror={isYou}>
-                {nameOverlay}
-              </AdaptiveVideoContainer>
-            </div>
-          ) : (
-            <div
+          return (
+            <VideoFeed
               key={pid}
-              className={`relative rounded-xl overflow-hidden bg-gray-800 aspect-video ${ringClasses}`}
-            >
-              <div className="w-full h-full flex items-center justify-center">
-                {player.characters?.image_url ? (
-                  <img src={player.characters.image_url} alt="" className={`w-16 h-16 ${isConnected ? 'opacity-60' : 'opacity-20 grayscale'}`} />
-                ) : (
-                  <div className="text-white/40 text-4xl">?</div>
-                )}
-              </div>
-              {nameOverlay}
-            </div>
+              displayName={player.display_name}
+              isConnected={isConnected}
+              isActive={isActive}
+              isYou={isYou}
+              avatarUrl={player.characters?.image_url}
+              videoTrack={cameraTrack}
+              isSpeaking={isSpeaking}
+              micEnabled={micEnabled}
+              cropMode={cropMode}
+              resultEffect={playerEffects[pid]}
+            />
           )
         })}
       </div>
@@ -239,6 +261,7 @@ export function VideoChat({
   roomPlayers = [],
   onDataMessage,
   setSendData,
+  playerEffects,
 }: {
   roomId: string
   playerId: string
@@ -247,9 +270,21 @@ export function VideoChat({
   roomPlayers?: RoomPlayer[]
   onDataMessage: (msg: DataMessage) => void
   setSendData: (fn: SendDataFn) => void
+  playerEffects?: Record<string, 'winner' | 'loser'>
 }) {
   const [token, setToken] = useState<string>('')
   const [liteMode, setLiteMode] = useState(false)
+  const [cropMode, setCropMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('famjam-video-crop')
+      return stored !== null ? stored === 'true' : true
+    }
+    return true
+  })
+
+  useEffect(() => {
+    localStorage.setItem('famjam-video-crop', String(cropMode))
+  }, [cropMode])
 
   useEffect(() => {
     const memory = (navigator as any).deviceMemory
@@ -279,8 +314,13 @@ export function VideoChat({
           liteMode={liteMode}
           roomPlayers={roomPlayers}
           currentPlayerId={playerId}
+          cropMode={cropMode}
+          playerEffects={playerEffects || {}}
         />
-        <RoomControls liteMode={liteMode} setLiteMode={setLiteMode} />
+        <div className="flex gap-2 justify-center">
+          <RoomControls liteMode={liteMode} setLiteMode={setLiteMode} />
+          <CropToggle cropMode={cropMode} onToggle={() => setCropMode(!cropMode)} />
+        </div>
       </LiveKitRoom>
     </div>
   )
