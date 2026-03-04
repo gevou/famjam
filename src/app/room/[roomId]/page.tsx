@@ -32,6 +32,13 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   const [splashVariant, setSplashVariant] = useState(0)
   const splashShownRef = useRef(false)
 
+  // Handle startGame and reset splash
+  const handleStartGame = useCallback(() => {
+    setShowSplash(false)
+    splashShownRef.current = false
+    startGame()
+  }, [startGame])
+
   const handleLeave = useCallback(async () => {
     if (playerId) await leaveRoom(roomId, playerId)
     router.push('/lobby')
@@ -81,13 +88,6 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   const winnerName = gameStatus?.winner
     ? players.find((rp: any) => rp.players.id === gameStatus.winner)?.players?.display_name || 'Winner'
     : ''
-
-  // Handle startGame and reset splash
-  const handleStartGame = useCallback(() => {
-    setShowSplash(false)
-    splashShownRef.current = false
-    startGame()
-  }, [startGame])
 
   const topBar = (
     <div className="flex justify-between items-center">
