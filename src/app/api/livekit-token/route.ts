@@ -18,18 +18,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  // Check if player is admin
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
-  const { data: player } = await supabase
-    .from('players')
-    .select('is_admin')
-    .eq('id', participantId)
-    .single()
-
-  const isAdmin = player?.is_admin ?? false
+  // Check if player is admin (requires service role key)
+  let isAdmin = false
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (serviceRoleKey && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    try {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        serviceRoleKey,
+      )
+      const { data: player } = await supabase
+        .from('players')
+        .select('is_admin')
+        .eq('id', participantId)
+        .single()
+      isAdmin = player?.is_admin ?? false
+    } catch {}
+  }
 
   const at = new AccessToken(apiKey, apiSecret, {
     identity: participantId,
