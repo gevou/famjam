@@ -6,16 +6,20 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { roomName, targetIdentity, action, trackSource, callerId } = body
 
-  if (!roomName || !targetIdentity || !action || !trackSource || !callerId) {
+  if (!roomName || !targetIdentity || !action || !callerId) {
     return NextResponse.json({ error: 'Missing params' }, { status: 400 })
   }
 
-  if (!['muteTrack', 'unmuteTrack'].includes(action)) {
+  const validActions = ['muteTrack', 'unmuteTrack', 'muteSpeakers', 'unmuteSpeakers']
+  if (!validActions.includes(action)) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   }
 
-  if (!['microphone', 'camera'].includes(trackSource)) {
-    return NextResponse.json({ error: 'Invalid trackSource' }, { status: 400 })
+  // Track actions require trackSource
+  if (['muteTrack', 'unmuteTrack'].includes(action)) {
+    if (!trackSource || !['microphone', 'camera'].includes(trackSource)) {
+      return NextResponse.json({ error: 'Invalid trackSource' }, { status: 400 })
+    }
   }
 
   // Verify caller is admin
@@ -48,7 +52,22 @@ export async function POST(req: NextRequest) {
 
   const svc = new RoomServiceClient(livekitHost, apiKey, apiSecret)
 
-  // Get participant's tracks to find the right one
+  // Speaker mute: update participant metadata to signal client
+  if (action === 'muteSpeakers' || action === 'unmuteSpeakers') {
+    const participants = await svc.listParticipants(roomName)
+    const target = participants.find(p => p.identity === targetIdentity)
+    if (!target) {
+      return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
+    }
+
+    const existingMeta = target.metadata ? JSON.parse(target.metadata) : {}
+    const newMeta = { ...existingMeta, muteSpeakers: action === 'muteSpeakers' }
+    await svc.updateParticipant(roomName, targetIdentity, { metadata: JSON.stringify(newMeta) })
+
+    return NextResponse.json({ ok: true })
+  }
+
+  // Track mute/unmute
   const participants = await svc.listParticipants(roomName)
   const target = participants.find(p => p.identity === targetIdentity)
 

@@ -38,8 +38,10 @@ export function VideoFeed({
   cropMode,
   resultEffect,
   isAdmin,
+  speakersMuted,
   onAdminMute,
   onAdminCamera,
+  onAdminSpeakers,
   onToggleMic,
   onToggleCamera,
   onToggleCrop,
@@ -56,8 +58,10 @@ export function VideoFeed({
   cropMode: boolean
   resultEffect?: 'winner' | 'loser'
   isAdmin?: boolean
+  speakersMuted?: boolean
   onAdminMute?: (mute: boolean) => void
   onAdminCamera?: (disable: boolean) => void
+  onAdminSpeakers?: (mute: boolean) => void
   onToggleMic?: () => void
   onToggleCamera?: () => void
   onToggleCrop?: () => void
@@ -125,7 +129,7 @@ export function VideoFeed({
       {resultEffect === 'loser' && (
         <div data-testid="loser-tint" className="absolute inset-0 bg-blue-900/30 pointer-events-none" />
       )}
-      {/* Local controls (your own feed) */}
+      {/* Self controls: mic + camera (everyone) */}
       {isYou && isConnected && (
         <div className="absolute top-1 left-1 flex gap-1">
           <button
@@ -146,31 +150,47 @@ export function VideoFeed({
           >
             {cameraEnabled !== false ? '📹' : '🚫'}
           </button>
-          <button
-            onClick={onToggleCrop}
-            className="w-7 h-7 rounded-full bg-black/40 text-white/70 text-xs flex items-center justify-center"
-            title={cropMode ? 'Fit video' : 'Crop video'}
-          >
-            {cropMode ? '⊡' : '⊞'}
-          </button>
+          {/* Crop toggle: admin only */}
+          {isAdmin && onToggleCrop && (
+            <button
+              onClick={onToggleCrop}
+              className="w-7 h-7 rounded-full bg-black/40 text-white/70 text-xs flex items-center justify-center"
+              title={cropMode ? 'Fit video' : 'Crop video'}
+            >
+              {cropMode ? '⊡' : '⊞'}
+            </button>
+          )}
         </div>
       )}
-      {/* Admin controls (remote feeds) */}
+      {/* Admin controls on remote feeds: mic, camera, speakers */}
       {isAdmin && !isYou && isConnected && (
         <div className="absolute top-1 right-1 flex gap-1">
           <button
             onClick={() => onAdminMute?.(!micEnabled)}
-            className="w-7 h-7 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/80"
+            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center hover:bg-black/80 ${
+              micEnabled ? 'bg-black/60 text-white' : 'bg-red-500/80 text-white'
+            }`}
             title={micEnabled ? 'Mute mic' : 'Unmute mic'}
           >
             {micEnabled ? '🎤' : '🔇'}
           </button>
           <button
             onClick={() => onAdminCamera?.(cameraEnabled !== false)}
-            className="w-7 h-7 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/80"
+            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center hover:bg-black/80 ${
+              cameraEnabled !== false ? 'bg-black/60 text-white' : 'bg-red-500/80 text-white'
+            }`}
             title={cameraEnabled !== false ? 'Disable camera' : 'Enable camera'}
           >
             {cameraEnabled !== false ? '📷' : '🚫'}
+          </button>
+          <button
+            onClick={() => onAdminSpeakers?.(!speakersMuted)}
+            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center hover:bg-black/80 ${
+              speakersMuted ? 'bg-red-500/80 text-white' : 'bg-black/60 text-white'
+            }`}
+            title={speakersMuted ? 'Unmute speakers' : 'Mute speakers'}
+          >
+            {speakersMuted ? '🔇' : '🔊'}
           </button>
         </div>
       )}
@@ -205,10 +225,21 @@ function VideoGrid({
 
   // Check if local participant is admin via metadata
   let localIsAdmin = false
+  let localSpeakersMuted = false
   try {
     const meta = localParticipant.metadata ? JSON.parse(localParticipant.metadata) : {}
     localIsAdmin = meta.isAdmin === true
+    localSpeakersMuted = meta.muteSpeakers === true
   } catch {}
+
+  // Check remote participants' speaker mute status from their metadata
+  const speakersMutedByIdentity = new Map<string, boolean>()
+  for (const p of participants) {
+    try {
+      const meta = p.metadata ? JSON.parse(p.metadata) : {}
+      speakersMutedByIdentity.set(p.identity, meta.muteSpeakers === true)
+    } catch {}
+  }
 
   const handleAdminMute = (targetIdentity: string, mute: boolean) => {
     fetch('/api/livekit-admin', {
@@ -233,6 +264,19 @@ function VideoGrid({
         targetIdentity,
         action: disable ? 'muteTrack' : 'unmuteTrack',
         trackSource: 'camera',
+        callerId: currentPlayerId,
+      }),
+    })
+  }
+
+  const handleAdminSpeakers = (targetIdentity: string, mute: boolean) => {
+    fetch('/api/livekit-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roomName,
+        targetIdentity,
+        action: mute ? 'muteSpeakers' : 'unmuteSpeakers',
         callerId: currentPlayerId,
       }),
     })
@@ -266,6 +310,7 @@ function VideoGrid({
           const isSpeaking = participant?.isSpeaking || false
           const micEnabled = participant?.isMicrophoneEnabled || false
           const cameraEnabled = participant?.isCameraEnabled || false
+          const pSpeakersMuted = speakersMutedByIdentity.get(pid) || false
 
           return (
             <div key={pid} className="w-[20vh] shrink-0">
@@ -282,8 +327,10 @@ function VideoGrid({
               cropMode={cropMode}
               resultEffect={playerEffects[pid]}
               isAdmin={localIsAdmin}
+              speakersMuted={pSpeakersMuted}
               onAdminMute={(mute) => handleAdminMute(pid, mute)}
               onAdminCamera={(disable) => handleAdminCamera(pid, disable)}
+              onAdminSpeakers={(mute) => handleAdminSpeakers(pid, mute)}
               onToggleMic={isYou ? () => localParticipant.setMicrophoneEnabled(!localParticipant.isMicrophoneEnabled) : undefined}
               onToggleCamera={isYou ? () => localParticipant.setCameraEnabled(!localParticipant.isCameraEnabled) : undefined}
               onToggleCrop={isYou ? onToggleCrop : undefined}
@@ -292,8 +339,8 @@ function VideoGrid({
           )
         })}
       </div>
-      {/* Render all remote audio tracks */}
-      {tracks
+      {/* Render remote audio tracks — skip if local speakers are muted by admin */}
+      {!localSpeakersMuted && tracks
         .filter(t => t.source === Track.Source.Microphone && t.participant.identity !== currentPlayerId)
         .map((track) => (
           <AudioTrack key={track.participant.sid + '-audio'} trackRef={track} />
