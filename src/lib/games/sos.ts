@@ -71,47 +71,105 @@ export const sos: GameDefinition = {
       currentTurn: playerIds[0],
       scores,
       lines: [] as WinLine[],
+      phase: 'play' as 'play' | 'claiming',
+      pendingPatterns: null as number[][] | null,
+      claimDeadline: null as number | null,
     }
   },
 
   validateMove(state: GameState, playerId: string, move: Move): boolean {
     if (state.currentTurn !== playerId) return false
-    const { position, letter } = move
-    if (letter !== 'S' && letter !== 'O') return false
-    if (position < 0 || position >= state.board.length) return false
-    if (state.board[position] !== null) return false
-    return true
+
+    const moveType = move.type || 'place'
+
+    if (moveType === 'place') {
+      if (state.phase === 'claiming') return false
+      const { position, letter } = move
+      if (letter !== 'S' && letter !== 'O') return false
+      if (position < 0 || position >= state.board.length) return false
+      if (state.board[position] !== null) return false
+      return true
+    }
+
+    if (moveType === 'claim' || moveType === 'pass') {
+      if (state.phase !== 'claiming') return false
+      return true
+    }
+
+    return false
   },
 
   applyMove(state: GameState, playerId: string, move: Move): GameState {
-    const board = [...state.board]
-    board[move.position] = move.letter
-    const newPatterns = findNewSOS(board, state.size, move.position)
-    const scores = { ...state.scores }
-    scores[playerId] = (scores[playerId] || 0) + newPatterns.length
+    const moveType = move.type || 'place'
 
-    const lines: WinLine[] = [
-      ...(state.lines || []),
-      ...newPatterns.map(cells => ({ cells, player: playerId })),
-    ]
+    if (moveType === 'place') {
+      const board = [...state.board]
+      board[move.position] = move.letter
+      const newPatterns = findNewSOS(board, state.size, move.position)
 
-    let nextIndex = state.currentTurnIndex
-    if (newPatterns.length === 0) {
-      nextIndex = (state.currentTurnIndex + 1) % state.playerOrder.length
+      return {
+        ...state,
+        board,
+        phase: 'claiming',
+        pendingPatterns: newPatterns,
+        claimDeadline: Date.now() + 5000,
+      }
     }
 
-    return {
-      ...state,
-      board,
-      scores,
-      lines,
-      currentTurnIndex: nextIndex,
-      currentTurn: state.playerOrder[nextIndex],
+    if (moveType === 'claim') {
+      const pendingPatterns: number[][] = state.pendingPatterns || []
+      if (pendingPatterns.length > 0) {
+        const scores = { ...state.scores }
+        scores[playerId] = (scores[playerId] || 0) + pendingPatterns.length
+
+        const lines: WinLine[] = [
+          ...(state.lines || []),
+          ...pendingPatterns.map((cells: number[]) => ({ cells, player: playerId })),
+        ]
+
+        // Extra turn — keep same player
+        return {
+          ...state,
+          scores,
+          lines,
+          phase: 'play',
+          pendingPatterns: null,
+          claimDeadline: null,
+        }
+      }
+
+      // No patterns to claim — just go back to play, advance turn
+      const nextIndex = (state.currentTurnIndex + 1) % state.playerOrder.length
+      return {
+        ...state,
+        phase: 'play',
+        pendingPatterns: null,
+        claimDeadline: null,
+        currentTurnIndex: nextIndex,
+        currentTurn: state.playerOrder[nextIndex],
+      }
     }
+
+    if (moveType === 'pass') {
+      // Forfeit any pending patterns, advance turn
+      const nextIndex = (state.currentTurnIndex + 1) % state.playerOrder.length
+      return {
+        ...state,
+        phase: 'play',
+        pendingPatterns: null,
+        claimDeadline: null,
+        currentTurnIndex: nextIndex,
+        currentTurn: state.playerOrder[nextIndex],
+      }
+    }
+
+    return state
   },
 
   getStatus(state: GameState): GameStatus {
     const boardFull = state.board.every((cell: string | null) => cell !== null)
+    // Don't finish while in claiming phase
+    if (state.phase === 'claiming') return { finished: false }
 
     if (state.variant === 'simple') {
       for (const [id, score] of Object.entries(state.scores)) {

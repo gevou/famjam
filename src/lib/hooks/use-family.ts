@@ -14,6 +14,7 @@ type Player = {
 export function useFamily() {
   const [players, setPlayers] = useState<Player[]>([])
   const [isParent, setIsParent] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -23,13 +24,14 @@ export function useFamily() {
 
     const { data: parent } = await supabase
       .from('players')
-      .select('family_id, is_parent')
+      .select('family_id, is_parent, is_admin')
       .eq('google_id', user.id)
       .single()
 
     if (!parent) return
 
     setIsParent(parent.is_parent)
+    setIsAdmin(parent.is_admin ?? false)
 
     const { data } = await supabase
       .from('players')
@@ -43,5 +45,5 @@ export function useFamily() {
 
   useEffect(() => { load() }, [])
 
-  return { players, isParent, loading, refresh: load }
+  return { players, isParent, isAdmin, loading, refresh: load }
 }

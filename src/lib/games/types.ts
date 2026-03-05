@@ -24,6 +24,7 @@ export interface GameDefinition {
   name: string
   minPlayers: number
   maxPlayers: number
+  adminOnly?: boolean
   initialState(playerIds: string[]): GameState
   validateMove(state: GameState, playerId: string, move: Move): boolean
   applyMove(state: GameState, playerId: string, move: Move): GameState

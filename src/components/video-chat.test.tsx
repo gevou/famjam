@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { VideoFeed, CropToggle } from './video-chat'
+import { VideoFeed } from './video-chat'
 
 // Mock LiveKit components
 vi.mock('@livekit/components-react', () => ({
@@ -69,16 +69,3 @@ describe('VideoFeed', () => {
   })
 })
 
-describe('CropToggle', () => {
-  it('renders toggle button', () => {
-    render(<CropToggle cropMode={false} onToggle={vi.fn()} />)
-    expect(screen.getByRole('button')).toBeInTheDocument()
-  })
-
-  it('calls onToggle when clicked', () => {
-    const onToggle = vi.fn()
-    render(<CropToggle cropMode={false} onToggle={onToggle} />)
-    fireEvent.click(screen.getByRole('button'))
-    expect(onToggle).toHaveBeenCalledOnce()
-  })
-})

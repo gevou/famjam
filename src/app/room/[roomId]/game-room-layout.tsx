@@ -26,9 +26,9 @@ export function GameRoomLayout({
       {/* Game board area — centered */}
       <div
         data-testid="layout-board-area"
-        className="flex-1 flex items-center justify-center overflow-hidden px-2 pt-12 pb-2"
+        className="flex-1 flex items-center justify-center overflow-auto px-[10px] pt-12 pb-2"
       >
-        <div className="w-full max-w-lg">
+        <div className="w-full max-h-full">
           {gameBoard}
         </div>
       </div>

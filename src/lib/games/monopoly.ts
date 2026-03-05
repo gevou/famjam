@@ -218,6 +218,7 @@ export const monopoly: GameDefinition = {
   name: 'Magic Land',
   minPlayers: 2,
   maxPlayers: 4,
+  adminOnly: true,
 
   initialState(playerIds: string[]): MonopolyState {
     const positions: Record<string, number> = {}

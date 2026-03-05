@@ -28,9 +28,11 @@ export default function LobbyPage() {
   const [rooms, setRooms] = useState<Room[]>([])
   const [lobbyPeers, setLobbyPeers] = useState<LobbyPresence[]>([])
   const [showCreate, setShowCreate] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const router = useRouter()
   const supabase = createClient()
-  const games = listGames()
+  const allGames = listGames()
+  const games = allGames.filter(g => !g.adminOnly || isAdmin)
 
   // Lobby presence via Supabase presence channel
   useEffect(() => {
@@ -89,11 +91,12 @@ export default function LobbyPage() {
       if (!familyId) {
         const { data: player } = await supabase
           .from('players')
-          .select('family_id')
+          .select('family_id, is_admin')
           .eq('id', playerId)
           .single()
         if (!player) return
         familyId = player.family_id
+        setIsAdmin(player.is_admin ?? false)
       }
 
       const { data } = await supabase

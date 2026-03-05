@@ -34,8 +34,15 @@ export function VideoFeed({
   videoTrack,
   isSpeaking,
   micEnabled,
+  cameraEnabled,
   cropMode,
   resultEffect,
+  isAdmin,
+  onAdminMute,
+  onAdminCamera,
+  onToggleMic,
+  onToggleCamera,
+  onToggleCrop,
 }: {
   displayName: string
   isConnected: boolean
@@ -45,8 +52,15 @@ export function VideoFeed({
   videoTrack: any | null
   isSpeaking: boolean
   micEnabled: boolean
+  cameraEnabled?: boolean
   cropMode: boolean
   resultEffect?: 'winner' | 'loser'
+  isAdmin?: boolean
+  onAdminMute?: (mute: boolean) => void
+  onAdminCamera?: (disable: boolean) => void
+  onToggleMic?: () => void
+  onToggleCamera?: () => void
+  onToggleCrop?: () => void
 }) {
   const ringClasses = resultEffect === 'winner'
     ? 'ring-4 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)]'
@@ -111,18 +125,56 @@ export function VideoFeed({
       {resultEffect === 'loser' && (
         <div data-testid="loser-tint" className="absolute inset-0 bg-blue-900/30 pointer-events-none" />
       )}
+      {/* Local controls (your own feed) */}
+      {isYou && isConnected && (
+        <div className="absolute top-1 left-1 flex gap-1">
+          <button
+            onClick={onToggleMic}
+            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center ${
+              micEnabled ? 'bg-black/40 text-white/70' : 'bg-red-500/80 text-white'
+            }`}
+            title={micEnabled ? 'Mute mic' : 'Unmute mic'}
+          >
+            {micEnabled ? '🎤' : '🔇'}
+          </button>
+          <button
+            onClick={onToggleCamera}
+            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center ${
+              cameraEnabled !== false ? 'bg-black/40 text-white/70' : 'bg-red-500/80 text-white'
+            }`}
+            title={cameraEnabled !== false ? 'Disable camera' : 'Enable camera'}
+          >
+            {cameraEnabled !== false ? '📹' : '🚫'}
+          </button>
+          <button
+            onClick={onToggleCrop}
+            className="w-7 h-7 rounded-full bg-black/40 text-white/70 text-xs flex items-center justify-center"
+            title={cropMode ? 'Fit video' : 'Crop video'}
+          >
+            {cropMode ? '⊡' : '⊞'}
+          </button>
+        </div>
+      )}
+      {/* Admin controls (remote feeds) */}
+      {isAdmin && !isYou && isConnected && (
+        <div className="absolute top-1 right-1 flex gap-1">
+          <button
+            onClick={() => onAdminMute?.(!micEnabled)}
+            className="w-7 h-7 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/80"
+            title={micEnabled ? 'Mute mic' : 'Unmute mic'}
+          >
+            {micEnabled ? '🎤' : '🔇'}
+          </button>
+          <button
+            onClick={() => onAdminCamera?.(cameraEnabled !== false)}
+            className="w-7 h-7 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/80"
+            title={cameraEnabled !== false ? 'Disable camera' : 'Enable camera'}
+          >
+            {cameraEnabled !== false ? '📷' : '🚫'}
+          </button>
+        </div>
+      )}
     </div>
-  )
-}
-
-export function CropToggle({ cropMode, onToggle }: { cropMode: boolean; onToggle: () => void }) {
-  return (
-    <button
-      onClick={onToggle}
-      className="px-3 py-2 rounded-lg text-sm font-semibold bg-white/20 text-white"
-    >
-      {cropMode ? 'Fit' : 'Crop'}
-    </button>
   )
 }
 
@@ -135,6 +187,8 @@ function VideoGrid({
   currentPlayerId,
   cropMode,
   playerEffects,
+  roomName,
+  onToggleCrop,
 }: {
   activeTurnPlayerId?: string
   liteMode: boolean
@@ -142,9 +196,47 @@ function VideoGrid({
   currentPlayerId: string
   cropMode: boolean
   playerEffects: Record<string, 'winner' | 'loser'>
+  roomName: string
+  onToggleCrop: () => void
 }) {
   const participants = useParticipants()
+  const { localParticipant } = useLocalParticipant()
   const tracks = useTracks([Track.Source.Camera, Track.Source.Microphone])
+
+  // Check if local participant is admin via metadata
+  let localIsAdmin = false
+  try {
+    const meta = localParticipant.metadata ? JSON.parse(localParticipant.metadata) : {}
+    localIsAdmin = meta.isAdmin === true
+  } catch {}
+
+  const handleAdminMute = (targetIdentity: string, mute: boolean) => {
+    fetch('/api/livekit-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roomName,
+        targetIdentity,
+        action: mute ? 'muteTrack' : 'unmuteTrack',
+        trackSource: 'microphone',
+        callerId: currentPlayerId,
+      }),
+    })
+  }
+
+  const handleAdminCamera = (targetIdentity: string, disable: boolean) => {
+    fetch('/api/livekit-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roomName,
+        targetIdentity,
+        action: disable ? 'muteTrack' : 'unmuteTrack',
+        trackSource: 'camera',
+        callerId: currentPlayerId,
+      }),
+    })
+  }
 
   // Build maps by player identity
   const cameraByIdentity = new Map<string, (typeof tracks)[number]>()
@@ -173,6 +265,7 @@ function VideoGrid({
           const cameraTrack = cameraByIdentity.get(pid) || null
           const isSpeaking = participant?.isSpeaking || false
           const micEnabled = participant?.isMicrophoneEnabled || false
+          const cameraEnabled = participant?.isCameraEnabled || false
 
           return (
             <div key={pid} className="w-[20vh] shrink-0">
@@ -185,8 +278,15 @@ function VideoGrid({
               videoTrack={cameraTrack}
               isSpeaking={isSpeaking}
               micEnabled={micEnabled}
+              cameraEnabled={cameraEnabled}
               cropMode={cropMode}
               resultEffect={playerEffects[pid]}
+              isAdmin={localIsAdmin}
+              onAdminMute={(mute) => handleAdminMute(pid, mute)}
+              onAdminCamera={(disable) => handleAdminCamera(pid, disable)}
+              onToggleMic={isYou ? () => localParticipant.setMicrophoneEnabled(!localParticipant.isMicrophoneEnabled) : undefined}
+              onToggleCamera={isYou ? () => localParticipant.setCameraEnabled(!localParticipant.isCameraEnabled) : undefined}
+              onToggleCrop={isYou ? onToggleCrop : undefined}
             />
             </div>
           )
@@ -235,25 +335,6 @@ function DataSync({
   }, [room, onMessage, setSendData])
 
   return null
-}
-
-function RoomControls({ liteMode, setLiteMode }: { liteMode: boolean; setLiteMode: (v: boolean) => void }) {
-  const { localParticipant } = useLocalParticipant()
-  const micEnabled = localParticipant.isMicrophoneEnabled
-
-  return (
-    <div className="flex gap-2 justify-center">
-      <button
-        onClick={() => localParticipant.setMicrophoneEnabled(!micEnabled)}
-        className={`px-4 py-2 rounded-lg text-sm font-semibold ${
-          !micEnabled ? 'bg-red-500 text-white' : 'bg-white/20 text-white'
-        }`}
-      >
-        {!micEnabled ? 'Unmute Mic' : 'Mute Mic'}
-      </button>
-      {/* TODO: re-enable lite mode after iPad Mini 2 testing */}
-    </div>
-  )
 }
 
 export function VideoChat({
@@ -319,11 +400,9 @@ export function VideoChat({
           currentPlayerId={playerId}
           cropMode={cropMode}
           playerEffects={playerEffects || {}}
+          roomName={roomId}
+          onToggleCrop={() => setCropMode(!cropMode)}
         />
-        <div className="flex gap-2 justify-center">
-          <RoomControls liteMode={liteMode} setLiteMode={setLiteMode} />
-          <CropToggle cropMode={cropMode} onToggle={() => setCropMode(!cropMode)} />
-        </div>
       </LiveKitRoom>
     </div>
   )

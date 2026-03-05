@@ -242,7 +242,7 @@ export function MonopolyBoard({
 
       {/* Board */}
       <div
-        className="grid grid-cols-7 w-full max-w-md aspect-square rounded-lg overflow-hidden shadow-lg"
+        className="grid grid-cols-7 w-full aspect-square rounded-lg overflow-hidden shadow-lg"
         style={{ border: '2px solid #374151', backgroundColor: '#f0fdf4' }}
       >
         {grid.map((row, r) =>
