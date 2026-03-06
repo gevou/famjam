@@ -1,15 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useActivePlayer } from '@/lib/hooks/use-active-player'
-import { listGames } from '@/lib/games/registry'
+import { listGames, getGame } from '@/lib/games/registry'
 import { createRoom, joinRoom } from '@/app/actions/rooms'
 import { PlayerBanner } from '@/components/player-banner'
 import Link from 'next/link'
 
-type RoomPlayer = { player_id: string; players: { id: string; display_name: string; characters: { image_url: string } | null } }
+type RoomPlayer = { player_id: string; players: { id: string; display_name: string; is_parent?: boolean; characters: { image_url: string } | null } }
 
 type Room = {
   id: string
@@ -22,6 +22,80 @@ type Room = {
 }
 
 type LobbyPresence = { playerId: string; displayName: string; imageUrl: string }
+
+function SwipeableCard({
+  children,
+  onDelete,
+  enabled,
+}: {
+  children: React.ReactNode
+  onDelete: () => void
+  enabled: boolean
+}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const startX = useRef(0)
+  const currentX = useRef(0)
+  const [offset, setOffset] = useState(0)
+  const [showDelete, setShowDelete] = useState(false)
+  const DELETE_THRESHOLD = 80
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!enabled) return
+    startX.current = e.touches[0].clientX
+    currentX.current = 0
+  }, [enabled])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!enabled) return
+    const diff = e.touches[0].clientX - startX.current
+    // Only allow swiping left
+    const clamped = Math.min(0, Math.max(-DELETE_THRESHOLD - 20, diff))
+    currentX.current = clamped
+    setOffset(clamped)
+  }, [enabled])
+
+  const handleTouchEnd = useCallback(() => {
+    if (!enabled) return
+    if (currentX.current < -DELETE_THRESHOLD) {
+      setOffset(-DELETE_THRESHOLD)
+      setShowDelete(true)
+    } else {
+      setOffset(0)
+      setShowDelete(false)
+    }
+  }, [enabled])
+
+  const handleReset = useCallback(() => {
+    setOffset(0)
+    setShowDelete(false)
+  }, [])
+
+  return (
+    <div ref={containerRef} className="relative overflow-hidden rounded-xl">
+      {/* Delete button behind */}
+      {enabled && (
+        <div className="absolute inset-y-0 right-0 flex items-center">
+          <button
+            onClick={() => { onDelete(); handleReset() }}
+            className="h-full px-6 bg-red-500 text-white font-bold text-sm flex items-center"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+      {/* Swipeable content */}
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClick={showDelete ? handleReset : undefined}
+        style={{ transform: `translateX(${offset}px)`, transition: offset === 0 || Math.abs(offset) === DELETE_THRESHOLD ? 'transform 0.2s ease-out' : 'none' }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export default function LobbyPage() {
   const playerId = useActivePlayer()
@@ -101,12 +175,38 @@ export default function LobbyPage() {
 
       const { data } = await supabase
         .from('rooms')
-        .select('*, players!rooms_created_by_fkey(display_name), room_players(player_id, players(id, display_name, characters(image_url)))')
+        .select('*, players!rooms_created_by_fkey(display_name), room_players(player_id, players(id, display_name, is_parent, characters(image_url)))')
         .eq('family_id', familyId)
         .in('status', ['waiting', 'playing'])
         .order('created_at', { ascending: false })
 
-      if (data) setRooms(data as any)
+      if (data) {
+        // Fetch game states for playing rooms to check if they're actually finished
+        const playingRoomIds = data.filter(r => r.status === 'playing').map(r => r.id)
+        let finishedRoomIds = new Set<string>()
+
+        if (playingRoomIds.length > 0) {
+          const { data: gsData } = await supabase
+            .from('game_states')
+            .select('room_id, state_json')
+            .in('room_id', playingRoomIds)
+
+          if (gsData) {
+            for (const gs of gsData) {
+              try {
+                const room = data.find(r => r.id === gs.room_id)
+                if (room && getGame(room.game_type).getStatus(gs.state_json).finished) {
+                  finishedRoomIds.add(gs.room_id)
+                  // Also update the room status so this doesn't happen again
+                  supabase.from('rooms').update({ status: 'finished' }).eq('id', gs.room_id).then(() => {})
+                }
+              } catch {}
+            }
+          }
+        }
+
+        setRooms(data.filter(r => !finishedRoomIds.has(r.id)) as any)
+      }
     }
 
     loadAll()
@@ -138,6 +238,11 @@ export default function LobbyPage() {
     router.push(`/room/${roomId}`)
   }
 
+  async function handleDelete(roomId: string) {
+    await supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
+    setRooms(prev => prev.filter(r => r.id !== roomId))
+  }
+
   if (!playerId) {
     return <div className="min-h-screen flex items-center justify-center">
       <p>No player selected. <a href="/home" className="underline">Go back</a></p>
@@ -145,7 +250,7 @@ export default function LobbyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-500 to-purple-600 p-8">
+    <div className="min-h-screen bg-gradient-to-b from-indigo-500 to-purple-600 p-8 safe-top">
       <div className="max-w-lg mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
@@ -180,41 +285,48 @@ export default function LobbyPage() {
             <p className="text-indigo-200 text-center py-8">No active games. Start one!</p>
           )}
           {rooms.map((room) => (
-            <div key={room.id} className="bg-white/20 rounded-xl p-4 flex items-center justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-white font-semibold">
-                  {games.find(g => g.id === room.game_type)?.name || room.game_type}
-                </p>
-                <div className="flex items-center gap-2 mt-2">
-                  {room.room_players?.map((rp) => (
-                    <div key={rp.player_id} className="flex items-center gap-1.5 bg-green-400/20 rounded-full px-2.5 py-1">
-                      {rp.players?.characters?.image_url && (
-                        <img src={rp.players.characters.image_url} alt="" className="w-5 h-5" />
-                      )}
-                      <span className="text-green-300 text-sm font-medium">{rp.players?.display_name}</span>
-                    </div>
-                  ))}
-                  {room.room_players.length < room.max_players && (
-                    <span className="text-indigo-300 text-sm">+{room.max_players - room.room_players.length} open</span>
-                  )}
+            <SwipeableCard key={room.id} onDelete={() => handleDelete(room.id)} enabled={isAdmin}>
+              <div className="bg-indigo-600 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold">
+                    {games.find(g => g.id === room.game_type)?.name || room.game_type}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    {room.room_players?.map((rp) => (
+                      <div key={rp.player_id} className="flex items-center gap-1.5 bg-green-400/20 rounded-full px-2.5 py-1">
+                        {rp.players?.characters?.image_url && (
+                          <span className="relative">
+                            <img src={rp.players.characters.image_url} alt="" className="w-5 h-5" />
+                            {rp.players?.is_parent && (
+                              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full border border-indigo-600" />
+                            )}
+                          </span>
+                        )}
+                        <span className="text-green-300 text-sm font-medium">{rp.players?.display_name}</span>
+                      </div>
+                    ))}
+                    {room.room_players.length < room.max_players && (
+                      <span className="text-indigo-300 text-sm">+{room.max_players - room.room_players.length} open</span>
+                    )}
+                  </div>
                 </div>
+                {room.room_players?.some(rp => rp.player_id === playerId) ? (
+                  <button
+                    onClick={() => router.push(`/room/${room.id}`)}
+                    className="bg-green-400 text-gray-900 px-6 py-2 rounded-lg font-semibold"
+                  >
+                    Enter
+                  </button>
+                ) : room.room_players.length < room.max_players ? (
+                  <button
+                    onClick={() => handleJoin(room.id)}
+                    className="bg-yellow-400 text-gray-900 px-6 py-2 rounded-lg font-semibold"
+                  >
+                    Join
+                  </button>
+                ) : null}
               </div>
-              {room.room_players?.some(rp => rp.player_id === playerId) ? (
-                <button
-                  onClick={() => router.push(`/room/${room.id}`)}
-                  className="bg-green-400 text-gray-900 px-6 py-2 rounded-lg font-semibold"
-                >
-                  Enter
-                </button>
-              ) : room.room_players.length < room.max_players ? (
-                <button
-                  onClick={() => handleJoin(room.id)}
-                  className="bg-yellow-400 text-gray-900 px-6 py-2 rounded-lg font-semibold"
-                >
-                  Join
-                </button>
-              ) : null}
-            </div>
+            </SwipeableCard>
           ))}
         </div>
 

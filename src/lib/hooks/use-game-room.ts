@@ -24,7 +24,7 @@ export function useGameRoom(roomId: string, playerId: string) {
   const loadPlayers = useCallback(async () => {
     const { data } = await supabase
       .from('room_players')
-      .select('*, players(id, display_name, character_id, characters(name, image_url))')
+      .select('*, players(id, display_name, character_id, is_parent, characters(name, image_url))')
       .eq('room_id', roomId)
       .order('seat_number')
     if (data) setPlayers(data)
@@ -81,20 +81,21 @@ export function useGameRoom(roomId: string, playerId: string) {
     sendDataRef.current = fn
   }, [])
 
-  const makeMove = useCallback(async (move: Move) => {
+  const makeMove = useCallback(async (move: Move, asPlayerId?: string) => {
     if (!gameState || !room) return
 
+    const effectivePlayerId = asPlayerId || playerId
     const game = getGame(room.game_type)
-    if (!game.validateMove(gameState, playerId, move)) return
+    if (!game.validateMove(gameState, effectivePlayerId, move)) return
 
-    const newState = game.applyMove(gameState, playerId, move)
+    const newState = game.applyMove(gameState, effectivePlayerId, move)
     setGameState(newState)
     lastMoveAt.current = Date.now()
 
     // Send via LiveKit data channel
     sendDataRef.current?.({
       event: 'move',
-      payload: { state: newState, move, playerId },
+      payload: { state: newState, move, playerId: effectivePlayerId },
     })
 
     // Persist to database
@@ -107,16 +108,25 @@ export function useGameRoom(roomId: string, playerId: string) {
 
     await supabase.from('moves').insert({
       room_id: roomId,
-      player_id: playerId,
+      player_id: effectivePlayerId,
       move_json: move,
     })
+
+    // Mark room as finished when game ends
+    const status = game.getStatus(newState)
+    if (status.finished) {
+      await supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
+    }
   }, [gameState, room, playerId, roomId, supabase])
 
-  const startGame = useCallback(async () => {
+  const startGame = useCallback(async (extraPlayerIds?: string[]) => {
     if (!room || !players.length) return
 
     const game = getGame(room.game_type)
-    const playerIds = players.map((rp: any) => rp.players.id)
+    const playerIds = [
+      ...players.map((rp: any) => rp.players.id),
+      ...(extraPlayerIds || []),
+    ]
     const initialState = game.initialState(playerIds)
 
     setGameState(initialState)

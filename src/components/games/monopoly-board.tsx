@@ -199,7 +199,7 @@ export function MonopolyBoard({
   const magicCard = s.magicCardIndex !== null ? MAGIC_CARDS[s.magicCardIndex] : null
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-3 w-full max-w-2xl mx-auto">
       {/* Theme toggle + Scoreboard */}
       <div className="flex gap-2 flex-wrap justify-center items-center">
         <div className="flex bg-white/10 rounded-full p-0.5 gap-0.5">
@@ -241,6 +241,7 @@ export function MonopolyBoard({
       <p className="text-white/60 text-xs font-medium">First to {s.targetCoins} coins wins!</p>
 
       {/* Board */}
+      <div className="relative w-full">
       <div
         className="grid grid-cols-7 w-full aspect-square rounded-lg overflow-hidden shadow-lg"
         style={{ border: '2px solid #374151', backgroundColor: '#f0fdf4' }}
@@ -280,6 +281,21 @@ export function MonopolyBoard({
         )}
       </div>
 
+      {/* Dice overlay on the board — only for current player's turn */}
+      {!finished && isMyTurn && s.phase === 'roll' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <button
+            onClick={handleRoll}
+            disabled={rolling}
+            className="pointer-events-auto flex flex-col items-center gap-1 bg-amber-400/95 hover:bg-amber-300 active:bg-amber-500 text-gray-900 px-8 py-3 rounded-2xl font-bold text-lg shadow-xl backdrop-blur-sm transition disabled:opacity-50"
+          >
+            <DieIcon value={s.diceRoll} rolling={rolling} />
+            {rolling ? 'Rolling...' : 'Roll!'}
+          </button>
+        </div>
+      )}
+      </div>
+
       {/* Event toast */}
       {s.lastEvent && !finished && (
         <div className="bg-gray-900/80 backdrop-blur-sm rounded-xl px-5 py-2.5 text-white text-center text-sm font-medium shadow-lg max-w-xs">
@@ -297,24 +313,6 @@ export function MonopolyBoard({
       {/* Actions */}
       {!finished && (
         <div className="flex flex-col items-center gap-2">
-          {s.phase === 'roll' && isMyTurn && (
-            <button
-              onClick={handleRoll}
-              disabled={rolling}
-              className="flex flex-col items-center gap-1 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-gray-900 px-10 py-3 rounded-2xl font-bold text-lg shadow-md transition disabled:opacity-50"
-            >
-              <DieIcon value={s.diceRoll} rolling={rolling} />
-              {rolling ? 'Rolling...' : 'Roll!'}
-            </button>
-          )}
-
-          {s.phase === 'roll' && !isMyTurn && (
-            <div className="text-white/60 text-sm flex items-center gap-2">
-              <DieIcon value={s.diceRoll} rolling={false} />
-              <span>Waiting for other player...</span>
-            </div>
-          )}
-
           {s.phase === 'buy' && isMyTurn && (
             <div className="flex flex-col items-center gap-2 bg-white/10 backdrop-blur rounded-2xl px-5 py-3">
               <p className="text-white font-medium">{currentSpaceThemed.emoji} Buy {currentSpaceThemed.name} for {currentSpace.price} coins?</p>

@@ -14,27 +14,33 @@ export function GameRoomLayout({
   splash?: ReactNode
 }) {
   return (
-    <div className="h-dvh overflow-hidden flex flex-col bg-gradient-to-b from-indigo-500 to-purple-600 relative">
-      {/* Top bar overlay */}
-      <div
-        data-testid="layout-top-bar"
-        className="absolute top-0 left-0 right-0 z-20 bg-black/40 backdrop-blur-sm px-3 py-2"
-      >
-        {topBar}
-      </div>
-
-      {/* Game board area — centered */}
+    <div className="h-dvh overflow-hidden relative bg-gradient-to-b from-indigo-950 via-purple-900 to-slate-900">
+      {/* Layer 1: Game board — centered, fills space */}
       <div
         data-testid="layout-board-area"
-        className="flex-1 flex items-center justify-center overflow-auto px-[10px] pt-12 pb-2"
+        className="absolute inset-0 flex items-center justify-center"
+        style={{ paddingTop: 'max(calc(env(safe-area-inset-top, 0px) + 140px), 150px)', paddingBottom: '8px' }}
       >
-        <div className="w-full max-h-full">
+        <div className="w-full max-h-full overflow-auto px-3 md:px-6">
           {gameBoard}
         </div>
       </div>
 
-      {/* Video strip at bottom */}
-      <div data-testid="layout-video-strip" className="shrink-0">
+      {/* Layer 2: Navigation — top corners */}
+      <div
+        data-testid="layout-top-bar"
+        className="absolute top-0 left-0 right-0 z-30 px-3 pt-1"
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 4px)' }}
+      >
+        {topBar}
+      </div>
+
+      {/* Layer 3: Video bubbles — below nav */}
+      <div
+        data-testid="layout-video-strip"
+        className="absolute left-0 right-0 z-20 flex justify-center"
+        style={{ top: 'max(calc(env(safe-area-inset-top, 0px) + 48px), 52px)' }}
+      >
         {videoStrip}
       </div>
 

@@ -19,28 +19,31 @@ export function useFamily() {
   const supabase = createClient()
 
   async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-    const { data: parent } = await supabase
-      .from('players')
-      .select('family_id, is_parent, is_admin')
-      .eq('google_id', user.id)
-      .single()
+      const { data: parent } = await supabase
+        .from('players')
+        .select('family_id, is_parent, is_admin')
+        .eq('google_id', user.id)
+        .single()
 
-    if (!parent) return
+      if (!parent) return
 
-    setIsParent(parent.is_parent)
-    setIsAdmin(parent.is_admin ?? false)
+      setIsParent(parent.is_parent)
+      setIsAdmin(parent.is_admin ?? false)
 
-    const { data } = await supabase
-      .from('players')
-      .select('*, characters(name, image_url)')
-      .eq('family_id', parent.family_id)
-      .order('created_at')
+      const { data } = await supabase
+        .from('players')
+        .select('*, characters(name, image_url)')
+        .eq('family_id', parent.family_id)
+        .order('created_at')
 
-    if (data) setPlayers(data as any)
-    setLoading(false)
+      if (data) setPlayers(data as any)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])

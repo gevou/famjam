@@ -94,7 +94,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-500 to-purple-600 p-8">
+    <div className="min-h-screen bg-gradient-to-b from-indigo-500 to-purple-600 p-8 safe-top">
       <h1 className="text-3xl font-bold text-white text-center mb-8">Who&apos;s playing?</h1>
       <div className="max-w-lg mx-auto grid grid-cols-2 gap-6">
         {players.map((player) => (
@@ -149,11 +149,16 @@ export default function HomePage() {
               onClick={() => selectPlayer(player.id)}
               className="bg-white/20 hover:bg-white/30 rounded-2xl p-6 text-center transition relative group"
             >
-              <img
-                src={player.characters?.image_url}
-                alt={player.characters?.name}
-                className="w-20 h-20 mx-auto mb-3"
-              />
+              <div className="relative w-20 h-20 mx-auto mb-3">
+                <img
+                  src={player.characters?.image_url}
+                  alt={player.characters?.name}
+                  className="w-20 h-20"
+                />
+                {player.is_parent && (
+                  <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-indigo-500" />
+                )}
+              </div>
               <p className="text-white text-xl font-semibold">{player.display_name}</p>
               {isParent && (
                 <span

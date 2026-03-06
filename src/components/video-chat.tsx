@@ -9,7 +9,7 @@ import {
   useParticipants,
   useLocalParticipant,
 } from '@livekit/components-react'
-import { Track, DataPacket_Kind, RoomEvent } from 'livekit-client'
+import { Track, RoomEvent } from 'livekit-client'
 import { useRoomContext } from '@livekit/components-react'
 import type { DataMessage, SendDataFn } from '@/lib/hooks/use-game-room'
 import '@livekit/components-styles'
@@ -19,11 +19,13 @@ type RoomPlayer = {
   players: {
     id: string
     display_name: string
-    characters?: { name: string; image_url: string }
+    character_id?: string | null
+    is_parent?: boolean
+    characters?: { name: string; image_url: string } | null
   }
 }
 
-// --- Exported components ---
+// --- Circular video bubble ---
 
 export function VideoFeed({
   displayName,
@@ -34,17 +36,9 @@ export function VideoFeed({
   videoTrack,
   isSpeaking,
   micEnabled,
-  cameraEnabled,
-  cropMode,
   resultEffect,
-  isAdmin,
-  speakersMuted,
-  onAdminMute,
-  onAdminCamera,
-  onAdminSpeakers,
-  onToggleMic,
-  onToggleCamera,
-  onToggleCrop,
+  onTap,
+  isPlayerParent,
 }: {
   displayName: string
   isConnected: boolean
@@ -54,235 +48,133 @@ export function VideoFeed({
   videoTrack: any | null
   isSpeaking: boolean
   micEnabled: boolean
-  cameraEnabled?: boolean
-  cropMode: boolean
   resultEffect?: 'winner' | 'loser'
-  isAdmin?: boolean
-  speakersMuted?: boolean
-  onAdminMute?: (mute: boolean) => void
-  onAdminCamera?: (disable: boolean) => void
-  onAdminSpeakers?: (mute: boolean) => void
-  onToggleMic?: () => void
-  onToggleCamera?: () => void
-  onToggleCrop?: () => void
+  onTap?: () => void
+  isPlayerParent?: boolean
 }) {
   const ringClasses = resultEffect === 'winner'
-    ? 'ring-4 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)]'
+    ? 'ring-3 ring-yellow-400 animate-pulse-glow'
     : isActive
-      ? 'ring-4 ring-yellow-400'
+      ? 'ring-3 ring-yellow-400 animate-pulse-glow scale-110'
       : isSpeaking
         ? 'ring-2 ring-green-400'
-        : ''
-
-  const nameOverlay = (
-    <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2 pointer-events-none">
-      <div className={`flex items-center gap-1.5 backdrop-blur-sm px-3 py-1.5 rounded-full ${
-        isConnected ? 'bg-green-500/40' : 'bg-black/60'
-      }`}>
-        {avatarUrl && (
-          <img src={avatarUrl} alt="" className="w-5 h-5" />
-        )}
-        <span className={`text-sm font-medium ${isConnected ? 'text-green-200' : 'text-white/50'}`}>
-          {displayName}
-          {isYou && ' (You)'}
-        </span>
-        {isActive && (
-          <span className="text-yellow-400 text-xs font-bold ml-1">YOUR TURN</span>
-        )}
-        {isConnected && (
-          micEnabled ? (
-            <span className={`text-xs ml-1 ${isSpeaking ? 'text-green-400' : 'text-white/40'}`}>
-              {isSpeaking ? '🔊' : '🎤'}
-            </span>
-          ) : (
-            <span className="text-red-400 text-xs ml-1">🔇</span>
-          )
-        )}
-      </div>
-    </div>
-  )
+        : 'ring-1 ring-white/20'
 
   return (
-    <div className={`relative rounded-xl overflow-hidden bg-gray-800 aspect-square ${ringClasses}`}>
-      {videoTrack ? (
-        <div className={`w-full h-full ${isYou ? 'scale-x-[-1]' : ''}`}>
-          <VideoTrack
-            trackRef={videoTrack}
-            style={{ objectFit: cropMode ? 'cover' : 'contain', width: '100%', height: '100%' }}
-          />
-        </div>
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" className={`w-16 h-16 ${isConnected ? 'opacity-60' : 'opacity-20 grayscale'}`} />
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative w-full" onClick={onTap}>
+        <div
+          className={`relative rounded-full overflow-hidden bg-gray-800 w-full pb-[100%] transition-transform duration-300 shadow-lg ${onTap ? 'cursor-pointer active:scale-95' : ''} ${ringClasses}`}
+        >
+          {videoTrack ? (
+            <div className={`absolute inset-0 ${isYou ? 'scale-x-[-1]' : ''}`}>
+              <VideoTrack
+                trackRef={videoTrack}
+                style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+              />
+            </div>
           ) : (
-            <div className="text-white/40 text-4xl">?</div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className={`w-3/5 h-3/5 object-contain ${isConnected ? 'opacity-60' : 'opacity-30 grayscale'}`} />
+              ) : (
+                <div className="text-white/30 text-lg font-bold">{displayName[0]}</div>
+              )}
+            </div>
+          )}
+          {resultEffect === 'loser' && (
+            <div className="absolute inset-0 bg-blue-900/40 pointer-events-none rounded-full" />
           )}
         </div>
-      )}
-      {nameOverlay}
-      {resultEffect === 'winner' && (
-        <div data-testid="winner-crown" className="absolute top-1 left-1/2 -translate-x-1/2 text-2xl pointer-events-none">
-          👑
-        </div>
-      )}
-      {resultEffect === 'loser' && (
-        <div data-testid="loser-tint" className="absolute inset-0 bg-blue-900/30 pointer-events-none" />
-      )}
-      {/* Self controls: mic + camera (everyone) */}
-      {isYou && isConnected && (
-        <div className="absolute top-1 left-1 flex gap-1">
-          <button
-            onClick={onToggleMic}
-            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center ${
-              micEnabled ? 'bg-black/40 text-white/70' : 'bg-red-500/80 text-white'
-            }`}
-            title={micEnabled ? 'Mute mic' : 'Unmute mic'}
-          >
-            {micEnabled ? '🎤' : '🔇'}
-          </button>
-          <button
-            onClick={onToggleCamera}
-            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center ${
-              cameraEnabled !== false ? 'bg-black/40 text-white/70' : 'bg-red-500/80 text-white'
-            }`}
-            title={cameraEnabled !== false ? 'Disable camera' : 'Enable camera'}
-          >
-            {cameraEnabled !== false ? '📹' : '🚫'}
-          </button>
-          {/* Crop toggle: admin only */}
-          {isAdmin && onToggleCrop && (
-            <button
-              onClick={onToggleCrop}
-              className="w-7 h-7 rounded-full bg-black/40 text-white/70 text-xs flex items-center justify-center"
-              title={cropMode ? 'Fit video' : 'Crop video'}
-            >
-              {cropMode ? '⊡' : '⊞'}
-            </button>
-          )}
-        </div>
-      )}
-      {/* Admin controls on remote feeds: mic, camera, speakers */}
-      {isAdmin && !isYou && isConnected && (
-        <div className="absolute top-1 right-1 flex gap-1">
-          <button
-            onClick={() => onAdminMute?.(!micEnabled)}
-            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center hover:bg-black/80 ${
-              micEnabled ? 'bg-black/60 text-white' : 'bg-red-500/80 text-white'
-            }`}
-            title={micEnabled ? 'Mute mic' : 'Unmute mic'}
-          >
-            {micEnabled ? '🎤' : '🔇'}
-          </button>
-          <button
-            onClick={() => onAdminCamera?.(cameraEnabled !== false)}
-            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center hover:bg-black/80 ${
-              cameraEnabled !== false ? 'bg-black/60 text-white' : 'bg-red-500/80 text-white'
-            }`}
-            title={cameraEnabled !== false ? 'Disable camera' : 'Enable camera'}
-          >
-            {cameraEnabled !== false ? '📷' : '🚫'}
-          </button>
-          <button
-            onClick={() => onAdminSpeakers?.(!speakersMuted)}
-            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center hover:bg-black/80 ${
-              speakersMuted ? 'bg-red-500/80 text-white' : 'bg-black/60 text-white'
-            }`}
-            title={speakersMuted ? 'Unmute speakers' : 'Mute speakers'}
-          >
-            {speakersMuted ? '🔇' : '🔊'}
-          </button>
-        </div>
-      )}
+        {isPlayerParent && (
+          <div className="absolute top-0 right-0 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-gray-800 z-10 pointer-events-none" />
+        )}
+        {resultEffect === 'winner' && (
+          <div className="absolute -top-1 left-1/2 -translate-x-1/2 text-sm pointer-events-none z-10">👑</div>
+        )}
+      </div>
+      <span className="text-white/80 text-[10px] font-semibold truncate max-w-full text-center leading-none drop-shadow-sm">
+        {isYou ? 'You' : displayName.split(' ')[0]}{isConnected && !micEnabled ? ' 🔇' : ''}
+      </span>
     </div>
   )
 }
 
-// --- Internal components ---
+// --- Video grid inside LiveKit context ---
 
 function VideoGrid({
   activeTurnPlayerId,
   liteMode,
   roomPlayers,
   currentPlayerId,
-  cropMode,
   playerEffects,
-  roomName,
-  onToggleCrop,
+  roomId,
+  isParent,
 }: {
   activeTurnPlayerId?: string
   liteMode: boolean
   roomPlayers: RoomPlayer[]
   currentPlayerId: string
-  cropMode: boolean
   playerEffects: Record<string, 'winner' | 'loser'>
-  roomName: string
-  onToggleCrop: () => void
+  roomId: string
+  isParent: boolean
 }) {
   const participants = useParticipants()
   const { localParticipant } = useLocalParticipant()
   const tracks = useTracks([Track.Source.Camera, Track.Source.Microphone])
+  const [muteToast, setMuteToast] = useState<string | null>(null)
 
-  // Check if local participant is admin via metadata
-  let localIsAdmin = false
+  const handleToggleMic = useCallback((targetPid: string) => {
+    if (targetPid === currentPlayerId) {
+      // Toggle own mic
+      const enabled = localParticipant.isMicrophoneEnabled
+      localParticipant.setMicrophoneEnabled(!enabled)
+      setMuteToast(enabled ? 'Mic off' : 'Mic on')
+      setTimeout(() => setMuteToast(null), 1500)
+    } else if (isParent) {
+      // Parent can mute/unmute others via server API
+      const participant = participants.find(p => p.identity === targetPid)
+      if (!participant) {
+        setMuteToast('Player not connected')
+        setTimeout(() => setMuteToast(null), 2000)
+        return
+      }
+      const isMuted = !participant.isMicrophoneEnabled
+      const action = isMuted ? 'unmuteTrack' : 'muteTrack'
+      setMuteToast(isMuted ? 'Unmuting...' : 'Muting...')
+      fetch('/api/livekit-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomName: roomId,
+          targetIdentity: targetPid,
+          action,
+          trackSource: 'microphone',
+        }),
+      }).then(async r => {
+        if (r.ok) {
+          setMuteToast(isMuted ? 'Unmuted' : 'Muted')
+        } else {
+          const d = await r.json().catch(() => ({}))
+          setMuteToast(`Error: ${d.error || r.status}`)
+        }
+        setTimeout(() => setMuteToast(null), 2000)
+      }).catch(e => {
+        setMuteToast(`Error: ${e.message}`)
+        setTimeout(() => setMuteToast(null), 2000)
+      })
+    } else {
+      setMuteToast('Not a parent')
+      setTimeout(() => setMuteToast(null), 1500)
+    }
+  }, [currentPlayerId, localParticipant, isParent, participants, roomId])
+
   let localSpeakersMuted = false
   try {
     const meta = localParticipant.metadata ? JSON.parse(localParticipant.metadata) : {}
-    localIsAdmin = meta.isAdmin === true
     localSpeakersMuted = meta.muteSpeakers === true
   } catch {}
 
-  // Check remote participants' speaker mute status from their metadata
-  const speakersMutedByIdentity = new Map<string, boolean>()
-  for (const p of participants) {
-    try {
-      const meta = p.metadata ? JSON.parse(p.metadata) : {}
-      speakersMutedByIdentity.set(p.identity, meta.muteSpeakers === true)
-    } catch {}
-  }
-
-  const handleAdminMute = (targetIdentity: string, mute: boolean) => {
-    fetch('/api/livekit-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        roomName,
-        targetIdentity,
-        action: mute ? 'muteTrack' : 'unmuteTrack',
-        trackSource: 'microphone',
-        callerId: currentPlayerId,
-      }),
-    })
-  }
-
-  const handleAdminCamera = (targetIdentity: string, disable: boolean) => {
-    fetch('/api/livekit-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        roomName,
-        targetIdentity,
-        action: disable ? 'muteTrack' : 'unmuteTrack',
-        trackSource: 'camera',
-        callerId: currentPlayerId,
-      }),
-    })
-  }
-
-  const handleAdminSpeakers = (targetIdentity: string, mute: boolean) => {
-    fetch('/api/livekit-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        roomName,
-        targetIdentity,
-        action: mute ? 'muteSpeakers' : 'unmuteSpeakers',
-        callerId: currentPlayerId,
-      }),
-    })
-  }
-
-  // Build maps by player identity
   const cameraByIdentity = new Map<string, (typeof tracks)[number]>()
   for (const t of tracks) {
     if (t.source === Track.Source.Camera) {
@@ -291,14 +183,21 @@ function VideoGrid({
   }
   const participantByIdentity = new Map(participants.map(p => [p.identity, p]))
 
-  // In lite mode: only show active turn player + yourself (keep all audio)
   const visiblePlayers = liteMode && activeTurnPlayerId
     ? roomPlayers.filter(rp => rp.players.id === activeTurnPlayerId || rp.players.id === currentPlayerId)
     : roomPlayers
 
+  const playerCount = visiblePlayers.length
+  // Bigger bubbles when fewer players
+  const sizeClass = playerCount <= 2
+    ? 'w-[28vw] max-w-32'
+    : playerCount === 3
+      ? 'w-[24vw] max-w-28'
+      : 'w-[20vw] max-w-24'
+
   return (
-    <div>
-      <div className="flex gap-2 overflow-x-auto px-2 py-1 justify-center">
+    <div className="relative">
+      <div className="inline-flex gap-3 items-start px-4">
         {visiblePlayers.map((rp) => {
           const pid = rp.players.id
           const player = rp.players
@@ -309,37 +208,33 @@ function VideoGrid({
           const cameraTrack = cameraByIdentity.get(pid) || null
           const isSpeaking = participant?.isSpeaking || false
           const micEnabled = participant?.isMicrophoneEnabled || false
-          const cameraEnabled = participant?.isCameraEnabled || false
-          const pSpeakersMuted = speakersMutedByIdentity.get(pid) || false
 
           return (
-            <div key={pid} className="w-[20vh] shrink-0">
-            <VideoFeed
-              displayName={player.display_name}
-              isConnected={isConnected}
-              isActive={isActive}
-              isYou={isYou}
-              avatarUrl={player.characters?.image_url}
-              videoTrack={cameraTrack}
-              isSpeaking={isSpeaking}
-              micEnabled={micEnabled}
-              cameraEnabled={cameraEnabled}
-              cropMode={cropMode}
-              resultEffect={playerEffects[pid]}
-              isAdmin={localIsAdmin}
-              speakersMuted={pSpeakersMuted}
-              onAdminMute={(mute) => handleAdminMute(pid, mute)}
-              onAdminCamera={(disable) => handleAdminCamera(pid, disable)}
-              onAdminSpeakers={(mute) => handleAdminSpeakers(pid, mute)}
-              onToggleMic={isYou ? () => localParticipant.setMicrophoneEnabled(!localParticipant.isMicrophoneEnabled) : undefined}
-              onToggleCamera={isYou ? () => localParticipant.setCameraEnabled(!localParticipant.isCameraEnabled) : undefined}
-              onToggleCrop={isYou ? onToggleCrop : undefined}
-            />
+            <div key={pid} className={`${sizeClass} shrink-0`}>
+              <VideoFeed
+                displayName={player.display_name}
+                isConnected={isConnected}
+                isActive={isActive}
+                isYou={isYou}
+                avatarUrl={player.characters?.image_url}
+                videoTrack={cameraTrack}
+                isSpeaking={isSpeaking}
+                micEnabled={micEnabled}
+                resultEffect={playerEffects[pid]}
+                onTap={(isYou || isParent) ? () => handleToggleMic(pid) : undefined}
+                isPlayerParent={player.is_parent}
+              />
             </div>
           )
         })}
       </div>
-      {/* Render remote audio tracks — skip if local speakers are muted by admin */}
+      {/* Mute toast */}
+      {muteToast && (
+        <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-3 py-1.5 rounded-full whitespace-nowrap z-30">
+          {muteToast}
+        </div>
+      )}
+      {/* Audio tracks */}
       {!localSpeakersMuted && tracks
         .filter(t => t.source === Track.Source.Microphone && t.participant.identity !== currentPlayerId)
         .map((track) => (
@@ -349,6 +244,8 @@ function VideoGrid({
     </div>
   )
 }
+
+// --- Data sync (unchanged) ---
 
 function DataSync({
   onMessage,
@@ -360,14 +257,12 @@ function DataSync({
   const room = useRoomContext()
 
   useEffect(() => {
-    // Register send function
     const send: SendDataFn = (msg) => {
       const encoded = new TextEncoder().encode(JSON.stringify(msg))
       room.localParticipant.publishData(encoded, { reliable: true })
     }
     setSendData(send)
 
-    // Listen for incoming data
     const handleData = (payload: Uint8Array) => {
       try {
         const msg = JSON.parse(new TextDecoder().decode(payload)) as DataMessage
@@ -384,6 +279,8 @@ function DataSync({
   return null
 }
 
+// --- Main VideoChat wrapper ---
+
 export function VideoChat({
   roomId,
   playerId,
@@ -393,6 +290,7 @@ export function VideoChat({
   onDataMessage,
   setSendData,
   playerEffects,
+  isParent,
 }: {
   roomId: string
   playerId: string
@@ -402,20 +300,10 @@ export function VideoChat({
   onDataMessage: (msg: DataMessage) => void
   setSendData: (fn: SendDataFn) => void
   playerEffects?: Record<string, 'winner' | 'loser'>
+  isParent?: boolean
 }) {
   const [token, setToken] = useState<string>('')
   const [liteMode, setLiteMode] = useState(false)
-  const [cropMode, setCropMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('famjam-video-crop')
-      return stored !== null ? stored === 'true' : true
-    }
-    return true
-  })
-
-  useEffect(() => {
-    localStorage.setItem('famjam-video-crop', String(cropMode))
-  }, [cropMode])
 
   useEffect(() => {
     const memory = (navigator as any).deviceMemory
@@ -428,29 +316,25 @@ export function VideoChat({
       .then(data => setToken(data.token))
   }, [roomId, playerId, playerName])
 
-  if (!token) return <div className="text-white text-center py-4">Connecting video...</div>
+  if (!token) return null
 
   return (
-    <div className="space-y-2">
-      <LiveKitRoom
-        token={token}
-        serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
-        video={true}
-        audio={true}
-        className="rounded-xl"
-      >
-        <DataSync onMessage={onDataMessage} setSendData={setSendData} />
-        <VideoGrid
-          activeTurnPlayerId={activeTurnPlayerId}
-          liteMode={liteMode}
-          roomPlayers={roomPlayers}
-          currentPlayerId={playerId}
-          cropMode={cropMode}
-          playerEffects={playerEffects || {}}
-          roomName={roomId}
-          onToggleCrop={() => setCropMode(!cropMode)}
-        />
-      </LiveKitRoom>
-    </div>
+    <LiveKitRoom
+      token={token}
+      serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
+      video={true}
+      audio={true}
+    >
+      <DataSync onMessage={onDataMessage} setSendData={setSendData} />
+      <VideoGrid
+        activeTurnPlayerId={activeTurnPlayerId}
+        liteMode={liteMode}
+        roomPlayers={roomPlayers}
+        currentPlayerId={playerId}
+        playerEffects={playerEffects || {}}
+        roomId={roomId}
+        isParent={isParent || false}
+      />
+    </LiveKitRoom>
   )
 }
