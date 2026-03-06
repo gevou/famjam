@@ -78,18 +78,10 @@ export default function HomePage() {
 
     // Clean up stale room_players from previous sessions
     // (e.g. app was closed without properly leaving a room)
-    const { data: staleRooms } = await supabase
+    await supabase
       .from('room_players')
-      .select('room_id, rooms!inner(status)')
+      .delete()
       .eq('player_id', playerId)
-      .in('rooms.status', ['waiting'])
-    if (staleRooms?.length) {
-      await supabase
-        .from('room_players')
-        .delete()
-        .eq('player_id', playerId)
-        .in('room_id', staleRooms.map(r => r.room_id))
-    }
 
     // Broadcast login event for non-parent players
     const player = players.find(p => p.id === playerId)
