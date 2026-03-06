@@ -71,14 +71,21 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     router.push('/lobby')
   }, [roomId, playerId, router])
 
-  // Clean up on tab close / browser navigation
+  // Clean up on tab close / browser navigation / app background
   useEffect(() => {
     if (!playerId) return
-    const onBeforeUnload = () => {
-      navigator.sendBeacon(`/api/leave-room?room=${roomId}&player=${playerId}`)
+    const leaveUrl = `/api/leave-room?room=${roomId}&player=${playerId}`
+    const onLeave = () => {
+      navigator.sendBeacon(leaveUrl)
     }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+    // beforeunload: desktop browsers
+    window.addEventListener('beforeunload', onLeave)
+    // pagehide: mobile Safari (fires when app is closed/swiped away)
+    window.addEventListener('pagehide', onLeave)
+    return () => {
+      window.removeEventListener('beforeunload', onLeave)
+      window.removeEventListener('pagehide', onLeave)
+    }
   }, [roomId, playerId])
 
   if (!playerId) return <div className="h-dvh flex items-center justify-center text-white">No player selected</div>

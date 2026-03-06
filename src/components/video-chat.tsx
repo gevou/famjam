@@ -183,9 +183,16 @@ function VideoGrid({
   }
   const participantByIdentity = new Map(participants.map(p => [p.identity, p]))
 
-  const visiblePlayers = liteMode && activeTurnPlayerId
+  const filteredPlayers = liteMode && activeTurnPlayerId
     ? roomPlayers.filter(rp => rp.players.id === activeTurnPlayerId || rp.players.id === currentPlayerId)
     : roomPlayers
+
+  // Current user always first
+  const visiblePlayers = [...filteredPlayers].sort((a, b) => {
+    if (a.players.id === currentPlayerId) return -1
+    if (b.players.id === currentPlayerId) return 1
+    return 0
+  })
 
   const playerCount = visiblePlayers.length
   // Bigger bubbles when fewer players

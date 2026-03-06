@@ -72,9 +72,24 @@ export default function HomePage() {
     setEditingId(null)
   }
 
-  function selectPlayer(playerId: string) {
+  async function selectPlayer(playerId: string) {
     // Store active player in sessionStorage (per-tab, supports multi-device)
     sessionStorage.setItem('activePlayerId', playerId)
+
+    // Clean up stale room_players from previous sessions
+    // (e.g. app was closed without properly leaving a room)
+    const { data: staleRooms } = await supabase
+      .from('room_players')
+      .select('room_id, rooms!inner(status)')
+      .eq('player_id', playerId)
+      .in('rooms.status', ['waiting'])
+    if (staleRooms?.length) {
+      await supabase
+        .from('room_players')
+        .delete()
+        .eq('player_id', playerId)
+        .in('room_id', staleRooms.map(r => r.room_id))
+    }
 
     // Broadcast login event for non-parent players
     const player = players.find(p => p.id === playerId)
